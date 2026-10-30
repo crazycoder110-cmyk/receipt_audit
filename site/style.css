@@ -38,7 +38,7 @@ nav { display: flex; align-items: center; justify-content: space-between; paddin
 .hero::before { content: ""; position: absolute; right: -160px; top: -200px; width: 560px; height: 560px; border-radius: 50%;
                 background: radial-gradient(circle, rgba(90,72,128,.6), transparent 70%); }
 .hero-grid { display: grid; grid-template-columns: 1.05fr 1fr; gap: 40px; align-items: center; padding: 64px 0 72px; position: relative; }
-.hero h1 { font-size: clamp(36px, 5.2vw, 64px); line-height: 1.04; margin: 14px 0 18px; font-weight: 800; }
+.hero h1 { font-size: clamp(36px, 5.2vw, 64px); line-height: 1.5; margin: 14px 0 18px; font-weight: 800; }
 .hero h1 em { font-style: normal; background: var(--khaki); color: var(--ink); padding: 0 .18em; border-radius: 12px; }
 .hero p { color: var(--thistle); font-size: 18px; max-width: 580px; margin: 0; }
 .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 30px; }
