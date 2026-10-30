@@ -111,12 +111,12 @@ def structured(llm, schema: type[BaseModel], system: str, user: str, out: int = 
 
 class ExtractedDocument(BaseModel):
     is_financial_document: bool
-    merchant: Optional[str] = Field(description="brand name")
+    merchant: Optional[str] = Field(description="short brand name, not the legal entity")
     date: Optional[str]
     total_amount: Optional[float]
     currency: Optional[str]
     tax_amount: Optional[float]
-    tax_label: Optional[str] = Field(description="as printed, e.g. moms 25%, CGST 9% + SGST 9%")
+    tax_label: Optional[str] = Field(description="tax type and rate(s) only, e.g. moms 25%, moms 12% + 25%, CGST 9% + SGST 9%")
     seller_tax_id: Optional[str] = Field(description="VAT no / GSTIN / org no")
     document_number: Optional[str]
     category: Optional[str] = Field(description="travel|fuel|hotel|flight|taxi|software|food|office|telecom|other")
