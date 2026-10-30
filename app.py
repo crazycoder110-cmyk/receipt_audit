@@ -69,7 +69,7 @@ TEXT = {
                  ("Hunt", "Searches again for anything still missing."),
                  ("File", "Saves to Drive, logs to Sheets, sends to Fortnox.")],
         "graph": "Show the agent graph",
-        "privacy_title": "Your data",
+        "privacy_title": "Your data", "policy": "Privacy policy", "terms": "Terms of service",
         "privacy": ["Email access is read-only. Nothing is sent, changed or deleted.",
                     "Receipts are stored in your own Google Drive.",
                     "Disconnect at any time. Nothing stays on our side."],
@@ -127,7 +127,7 @@ TEXT = {
                  ("Leta", "Söker igen efter det som fortfarande saknas."),
                  ("Arkivera", "Sparar i Drive, loggar i Kalkylark, skickar till Fortnox.")],
         "graph": "Visa agentens graf",
-        "privacy_title": "Din data",
+        "privacy_title": "Din data", "policy": "Integritetspolicy", "terms": "Användarvillkor",
         "privacy": ["Mejlåtkomsten är endast läsning. Inget skickas, ändras eller raderas.",
                     "Kvitton sparas i din egen Google Drive.",
                     "Koppla från när du vill. Inget sparas hos oss."],
@@ -257,6 +257,7 @@ button[data-baseweb="tab"] p {font-weight:600;}
 ss = st.session_state
 GROQ_KEY = cfg("GROQ_API_KEY")
 REDIRECT = cfg("REDIRECT_URI", "http://localhost:8501")
+SITE = cfg("SITE_URL", "https://receipt-audit.vercel.app")  # home page, privacy policy and terms (site/)
 NEEDED_SCOPES = {"https://www.googleapis.com/auth/gmail.readonly", "https://www.googleapis.com/auth/drive.file"}
 
 
@@ -645,4 +646,6 @@ with side:
             st.graphviz_chart(graph_dot())
     with st.container(key="card_privacy"):
         h(st, f"<div class='eyebrow'>{T['privacy_title']}</div><ul class='plist'>"
-              + "".join(f"<li>{line}</li>" for line in T["privacy"]) + "</ul>")
+              + "".join(f"<li>{line}</li>" for line in T["privacy"]) + "</ul>"
+              f"<div class='muted'><a href='{SITE}/privacy' target='_blank'>{T['policy']}</a> &middot; "
+              f"<a href='{SITE}/terms' target='_blank'>{T['terms']}</a></div>")
