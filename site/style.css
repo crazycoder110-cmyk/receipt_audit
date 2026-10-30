@@ -121,7 +121,7 @@ footer a { color: var(--muted); margin-left: 18px; }
             box-shadow: 0 16px 36px -28px rgba(24,15,33,.4); }
 .cmp { width: 100%; min-width: 1080px; border-collapse: separate; border-spacing: 0; font-size: 14px; }
 .cmp th, .cmp td { padding: 14px 14px; text-align: left; vertical-align: top; border-top: 1px solid var(--line); }
-.cmp thead th { border-top: 0; font-size: 15px; font-weight: 800; vertical-align: bottom; background: var(--paper); }
+.cmp thead th { border-top: 0; font-size: 15px; font-weight: 800; vertical-align: auto; background: var(--paper); }
 .cmp thead th small { display: block; font-size: 12px; font-weight: 600; color: var(--muted); }
 .cmp tbody th { font-weight: 700; width: 200px; position: sticky; left: 0; background: var(--paper); z-index: 1; }
 .cmp td { color: #3b3542; line-height: 1.45; }
