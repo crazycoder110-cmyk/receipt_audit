@@ -6,7 +6,9 @@
                                      ▼                                        │ all found
                        hunter (ReAct) ⇄ tools                                 │
                                      │ done                                   ▼
-                                     └────────────────────────────────► file_receipts → END
+                                     └────────────────────────────────► file_receipts (Drive)
+                                                                              │ Fortnox connected?
+                                                                     send_to_fortnox ─► write_log (Sheet) → END
 
 Every decision that needs understanding (what to search for, which mails are receipts, what a document says,
 which receipt belongs to which transaction, where else to look) is made by the LLM. Code only does I/O,
@@ -74,6 +76,7 @@ class AuditState(TypedDict, total=False):
     matches: Annotated[dict, merge]               # tx_id -> {receipt_id, confidence, status, reason, by}
     messages: Annotated[list, add_messages]       # hunter agent conversation
     hunter_steps: int
+    fortnox: bool                                 # Fortnox connected for this run
     links: dict
     log: Annotated[list[str], operator.add]
 
@@ -135,7 +138,7 @@ class StatementLines(BaseModel):
 
 # ---------------------------------------------------------------- models
 
-def make_context(creds, groq_key: str, home_currency: str = "SEK") -> AgentContext:
+def make_context(creds, groq_key: str, home_currency: str = "SEK", fortnox=None) -> AgentContext:
     def llm(model: str, max_tokens: int) -> ChatGroq:
         # low reasoning effort keeps hidden reasoning tokens (which count against TPM) small
         return ChatGroq(model=model, api_key=groq_key, temperature=0, reasoning_effort="low",
@@ -143,7 +146,7 @@ def make_context(creds, groq_key: str, home_currency: str = "SEK") -> AgentConte
     return AgentContext(creds=creds, fast=llm(GROQ_FAST_MODEL, 1200), smart=llm(GROQ_MODEL, 2500),
                         vision=ChatGroq(model=GROQ_VISION_MODEL, api_key=groq_key, temperature=0, max_tokens=600,
                                         max_retries=3),
-                        home_currency=home_currency)
+                        home_currency=home_currency, fortnox=fortnox)
 
 
 # ---------------------------------------------------------------- card statement (any provider, any country)
@@ -291,7 +294,7 @@ def reconcile_receipts(transactions: list[dict], receipts: list[dict], llm=None,
             used.add(c[0][2]["rc_id"])
             matches[t["tx_id"]] = {"receipt_id": c[0][2]["rc_id"], "confidence": c[0][0], "status": "matched",
                                    "reason": c[0][1].capitalize() + ".", "by": "rules"}
-    log.append(f"🔗 {len(matches)} clear matches by amount/date/name")
+    log.append(f"{len(matches)} clear matches by amount/date/name")
 
     ambiguous = [t for t in open_tx if t["tx_id"] not in matches
                  and any(r["rc_id"] not in used for _, _, r in cands[t["tx_id"]])]
@@ -314,7 +317,7 @@ def reconcile_receipts(transactions: list[dict], receipts: list[dict], llm=None,
                 matches[d.tx_id] = {"receipt_id": d.receipt_id, "confidence": round(d.confidence, 2),
                                     "status": "matched" if d.confidence >= 0.8 else "check",
                                     "reason": d.reason, "by": "LLM"}
-        log.append(f"🧠 LLM reviewed {len(ambiguous)} unclear transaction(s)")
+        log.append(f"LLM reviewed {len(ambiguous)} unclear transaction(s)")
     elif ambiguous:  # no LLM available: conservative suggestions only
         for t in ambiguous:
             s, why, r = next((c for c in cands[t["tx_id"]] if c[2]["rc_id"] not in used), (0, "", None))
@@ -337,7 +340,7 @@ def plan_queries(state: AuditState, runtime: Runtime[AgentContext]) -> dict:
     merchants = [m for m, _ in Counter(t["merchant"] for t in state["transactions"]).most_common(40)]
     plan = structured(runtime.context.fast, SearchPlan, prompts.PLAN_QUERIES, "\n".join(merchants))
     queries = [f"({q}) {window}" for q in plan.queries[:5]]
-    return {"queries": queries, "log": [f"🧠 Planned {len(queries)} searches: {plan.reasoning}"]}
+    return {"queries": queries, "log": [f"Planned {len(queries)} searches: {plan.reasoning}"]}
 
 
 def search_inbox(state: AuditState, runtime: Runtime[AgentContext]) -> dict:
@@ -350,8 +353,8 @@ def search_inbox(state: AuditState, runtime: Runtime[AgentContext]) -> dict:
         try:
             found.update({m["id"]: m for m in tools.search_messages(creds, q, QUERY_SCAN_LIMIT)})
         except Exception as e:  # an invalid query from the planner must not stop the run
-            log.append(f"⚠️ Search failed: {q} ({e})")
-    return {"candidates": found, "log": log + [f"📬 {len(found)} emails in the window to consider"]}
+            log.append(f"Search failed: {q} ({e})")
+    return {"candidates": found, "log": log + [f"{len(found)} emails in the window to consider"]}
 
 
 def triage(state: AuditState, runtime: Runtime[AgentContext]) -> dict:
@@ -363,7 +366,7 @@ def triage(state: AuditState, runtime: Runtime[AgentContext]) -> dict:
         res = structured(runtime.context.fast, Triage, prompts.TRIAGE, lines, out=300)
         picked += [batch[n]["id"] for n in res.selected if 0 <= n < len(batch)]
     picked = list(dict.fromkeys(picked))[:MAX_EXTRACT]
-    return {"shortlist": picked, "log": [f"🗂️ {len(picked)} look like receipts or invoices, reading them"]}
+    return {"shortlist": picked, "log": [f"{len(picked)} look like receipts or invoices, reading them"]}
 
 
 def fan_out(state: AuditState):
@@ -374,19 +377,19 @@ def extract_one(task: ExtractTask, runtime: Runtime[AgentContext]) -> dict:
     try:
         rc = tools.extract_document(runtime.context, task["msg_id"])
     except Exception as e:
-        return {"log": [f"⚠️ Could not read {task['msg_id']}: {e}"]}
+        return {"log": [f"Could not read {task['msg_id']}: {e}"]}
     if not rc:
         return {"log": []}
     tax = f" · tax {rc['vat']} ({rc['tax_label']})" if rc.get("vat") else ""
     return {"receipts": {rc["rc_id"]: rc},
-            "log": [f"🧾 {rc['merchant']} · {rc['date']} · {rc['amount']:.2f} {rc['currency']}{tax}"]}
+            "log": [f"Receipt: {rc['merchant']} · {rc['date']} · {rc['amount']:.2f} {rc['currency']}{tax}"]}
 
 
 def reconcile(state: AuditState, runtime: Runtime[AgentContext]) -> dict:
     matches, log = reconcile_receipts(state["transactions"], list(state.get("receipts", {}).values()),
                                       runtime.context.smart, state.get("matches"))
     missing = len(state["transactions"]) - len(state.get("matches", {})) - len(matches)
-    return {"matches": matches, "log": log + [f"❓ {missing} transaction(s) without a receipt so far"]}
+    return {"matches": matches, "log": log + [f"{missing} transaction(s) without a receipt so far"]}
 
 
 def route_after_reconcile(state: AuditState) -> str:
@@ -410,8 +413,8 @@ def hunter(state: AuditState, runtime: Runtime[AgentContext]) -> dict:
     tools.budget(ctx.smart).acquire(tools._estimate(*(m.content for m in messages), out=700))
     reply = ctx.smart.bind_tools(tools.HUNTER_TOOLS).invoke(messages)
     steps = state.get("hunter_steps", 0) + 1
-    log = [f"🔎 Hunter: {', '.join(c['name'] for c in reply.tool_calls)}"] if reply.tool_calls \
-        else [f"🔎 Hunter done: {str(reply.content)[:300]}"]
+    log = [f"Hunter: {', '.join(c['name'] for c in reply.tool_calls)}"] if reply.tool_calls \
+        else [f"Hunter done: {str(reply.content)[:300]}"]
     return {"messages": new + [reply], "hunter_steps": steps, "log": log}
 
 
@@ -434,20 +437,51 @@ def build_rows(transactions: list[dict], receipts: dict, matches: dict) -> list[
 
 
 def file_receipts(state: AuditState, runtime: Runtime[AgentContext]) -> dict:
-    creds = runtime.context.creds
     receipts = {k: dict(v) for k, v in state.get("receipts", {}).items()}
     log = []
     for rc in receipts.values():
         if not rc.get("drive_link"):
             try:
-                rc["drive_link"] = tools.file_receipt(creds, rc)
-                log.append(f"📁 Filed {tools.receipt_filename(rc)}")
+                rc["drive_link"] = tools.file_receipt(runtime.context.creds, rc)
+                log.append(f"Filed in Drive: {tools.receipt_filename(rc)}")
             except Exception as e:
-                log.append(f"⚠️ Could not file {rc['merchant']}: {e}")
+                log.append(f"Could not file {rc['merchant']}: {e}")
+    return {"receipts": receipts, "log": log}
+
+
+def route_after_filing(state: AuditState) -> str:
+    return "send_to_fortnox" if state.get("fortnox") else "write_log"
+
+
+def push_to_fortnox(fx, creds, rows: list[dict], log) -> None:
+    """Matched receipts go to the Fortnox voucher inbox once (fortnox_id marks them as sent).
+    Suggestions wait until the owner confirms them; owner photos are sent by the UI at upload time."""
+    for r in rows:
+        rc = r.get("receipt")
+        if r["status"] != "matched" or not rc or rc.get("fortnox_id") or rc["rc_id"].startswith("photo-"):
+            continue
+        try:
+            rc["fortnox_id"] = fx.upload(tools.receipt_filename(rc), tools.receipt_content(creds, rc))
+            log(f"Sent to Fortnox: {tools.receipt_filename(rc)}")
+        except Exception as e:
+            log(f"Could not send {rc['merchant']} to Fortnox: {e}")
+
+
+def send_to_fortnox(state: AuditState, runtime: Runtime[AgentContext]) -> dict:
+    receipts = {k: dict(v) for k, v in state.get("receipts", {}).items()}
+    rows = build_rows(state["transactions"], receipts, state.get("matches", {}))
+    log: list[str] = []
+    push_to_fortnox(runtime.context.fortnox, runtime.context.creds, rows, log.append)
+    return {"receipts": receipts, "log": log}
+
+
+def write_log(state: AuditState, runtime: Runtime[AgentContext]) -> dict:
+    creds = runtime.context.creds
+    receipts = state.get("receipts", {})
     rows = build_rows(state["transactions"], receipts, state.get("matches", {}))
     links = {"sheet": tools.write_sheet(creds, rows, list(receipts.values())),
              "folder": tools.root_folder_link(creds)}
-    return {"receipts": receipts, "links": links, "log": log + ["📊 Receipt log sheet updated"]}
+    return {"links": links, "log": ["Receipt log sheet updated"]}
 
 
 def build_graph():
@@ -460,6 +494,8 @@ def build_graph():
     g.add_node("hunter", hunter)
     g.add_node("tools", ToolNode(tools.HUNTER_TOOLS))
     g.add_node("file_receipts", file_receipts)
+    g.add_node("send_to_fortnox", send_to_fortnox)
+    g.add_node("write_log", write_log)
 
     g.add_edge(START, "plan_queries")
     g.add_edge("plan_queries", "search_inbox")
@@ -469,7 +505,9 @@ def build_graph():
     g.add_conditional_edges("reconcile", route_after_reconcile, ["hunter", "file_receipts"])
     g.add_conditional_edges("hunter", route_hunter, ["tools", "file_receipts"])
     g.add_edge("tools", "hunter")
-    g.add_edge("file_receipts", END)
+    g.add_conditional_edges("file_receipts", route_after_filing, ["send_to_fortnox", "write_log"])
+    g.add_edge("send_to_fortnox", "write_log")
+    g.add_edge("write_log", END)
     return g.compile()
 
 
@@ -479,12 +517,12 @@ GRAPH = build_graph()
 # ---------------------------------------------------------------- entry points
 
 def run(creds, groq_key: str, transactions: list[dict], since: dt.date, until: dt.date, log=print,
-        hunt: bool = True) -> dict:
+        hunt: bool = True, fortnox=None) -> dict:
     """The nightly job. Streams progress lines to `log` and returns rows for the UI."""
     home = Counter(t.get("currency") or "SEK" for t in transactions).most_common(1)[0][0] if transactions else "SEK"
-    ctx = make_context(creds, groq_key, home)
+    ctx = make_context(creds, groq_key, home, fortnox)
     state: dict = {"transactions": transactions, "since": since.isoformat(), "until": until.isoformat(),
-                   "hunt": hunt, "log": []}
+                   "hunt": hunt, "fortnox": fortnox is not None, "log": []}
     seen, final = 0, state
     start = tools.tokens_used()
     for final in GRAPH.stream(state, config={"max_concurrency": 2, "recursion_limit": 60},
@@ -492,18 +530,20 @@ def run(creds, groq_key: str, transactions: list[dict], since: dt.date, until: d
         for line in final.get("log", [])[seen:]:
             log(line)
         seen = len(final.get("log", []))
-    log(f"💰 ≈{tools.tokens_used() - start:,} LLM tokens this run (Groq free tier: 200K/day per model)")
+    log(f"≈{tools.tokens_used() - start:,} LLM tokens this run (Groq free tier: 200K/day per model)")
     receipts = final.get("receipts", {})
     return {"rows": build_rows(transactions, receipts, final.get("matches", {})),
             "receipts": list(receipts.values()), **final.get("links", {})}
 
 
-def sync(creds, rows: list[dict], receipts: list[dict], log=print) -> dict:
-    """After the owner fixes misses in the UI: file anything new and rewrite the sheet."""
+def sync(creds, rows: list[dict], receipts: list[dict], log=print, fortnox=None) -> dict:
+    """After the owner fixes misses in the UI: file anything new, send confirmed receipts, rewrite the sheet."""
     for rc in receipts:
         if not rc.get("drive_link"):
             rc["drive_link"] = tools.file_receipt(creds, rc)
-            log(f"📁 Filed {tools.receipt_filename(rc)}")
+            log(f"Filed in Drive: {tools.receipt_filename(rc)}")
+    if fortnox:
+        push_to_fortnox(fortnox, creds, rows, log)
     return {"sheet": tools.write_sheet(creds, rows, receipts), "folder": tools.root_folder_link(creds)}
 
 
@@ -513,6 +553,8 @@ if __name__ == "__main__":
     from dotenv import load_dotenv
     from google.auth.transport.requests import Request
     from google.oauth2.credentials import Credentials
+
+    import fortnox
 
     load_dotenv(".env")
     if len(sys.argv) < 2:
@@ -524,6 +566,7 @@ if __name__ == "__main__":
     key = os.environ["GROQ_API_KEY"]
     tx = load_statement(sys.argv[1], sys.argv[1], make_context(creds, key))
     days = int(sys.argv[2]) if len(sys.argv) > 2 else 1
-    result = run(creds, key, tx, dt.date.today() - dt.timedelta(days=days), dt.date.today())
+    result = run(creds, key, tx, dt.date.today() - dt.timedelta(days=days), dt.date.today(),
+                 fortnox=fortnox.from_saved_token())
     done = sum(r["status"] == "matched" for r in result["rows"])
     print(f"\n{done} of {len(result['rows'])} transactions have a receipt. Sheet: {result.get('sheet')}")

@@ -4,3 +4,5 @@ __pycache__/
 .streamlit/secrets.toml
 token.json
 *.pdf
+demo_inbox/
+fortnox_token.json

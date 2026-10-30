@@ -49,6 +49,7 @@ class AgentContext:
     smart: Any               # gpt-oss-120b: statement layout, reconcile, hunter (reasoning)
     vision: Any = None       # scanned PDFs / photos
     home_currency: str = "SEK"
+    fortnox: Any = None      # fortnox.Fortnox when the owner connected Fortnox
 
 
 # ---------------------------------------------------------------- Groq free-tier budget
@@ -361,7 +362,7 @@ def submit_match(tx_id: str, receipt_id: str, confidence: float, reason: str, ru
     match = {"receipt_id": receipt_id, "confidence": round(float(confidence), 2), "reason": reason,
              "status": "matched" if confidence >= 0.8 else "check", "by": "hunter agent"}
     return reply("Saved.", receipts={receipt_id: receipts[receipt_id]}, matches={tx_id: match},
-                 log=[f"🔎 Hunter matched {tx_id} → {receipts[receipt_id]['merchant']}: {reason}"])
+                 log=[f"Hunter matched {tx_id} → {receipts[receipt_id]['merchant']}: {reason}"])
 
 
 HUNTER_TOOLS = [gmail_search, read_email, read_attachment, extract_receipt, submit_match]
@@ -435,8 +436,8 @@ def file_receipt(creds, rc: dict, content: bytes | None = None, mime: str = "app
                                 fields="webViewLink").execute()["webViewLink"]
 
 
-STATUS_LABEL = {"matched": "✅ Matched", "check": "🟡 Check suggestion", "missing": "❌ Missing",
-                "no_receipt": "➖ No receipt needed"}
+STATUS_LABEL = {"matched": "Matched", "check": "Check suggestion", "missing": "Missing",
+                "no_receipt": "No receipt needed"}
 
 
 def write_sheet(creds, rows: list[dict], receipts: list[dict]) -> str:
@@ -454,14 +455,14 @@ def write_sheet(creds, rows: list[dict], receipts: list[dict]) -> str:
 
     link = lambda url: f'=HYPERLINK("{url}","Open")' if url else ""
     tx_values = [["Date", "Card description", "Amount", "Currency", "Status", "Confidence", "Why", "Matched by",
-                  "Receipt merchant", "Receipt date", "Receipt total", "Tax", "Receipt file"]]
+                  "Receipt merchant", "Receipt date", "Receipt total", "Tax", "Receipt file", "Fortnox"]]
     for r in rows:
         rc = r.get("receipt") or {}
         tx_values.append([r["date"], r["merchant"], r["amount"], r.get("currency", ""), STATUS_LABEL[r["status"]],
                           r["confidence"], r.get("reason", ""), r.get("by", ""), rc.get("merchant", ""),
                           rc.get("date", ""), f"{rc['amount']:.2f} {rc['currency']}" if rc else "",
                           f"{rc['vat']} ({rc.get('tax_label') or ''})" if rc.get("vat") else "",
-                          link(rc.get("drive_link"))])
+                          link(rc.get("drive_link")), "Sent" if rc.get("fortnox_id") else ""])
     rc_values = [["Date", "Merchant", "Total", "Currency", "Tax", "Tax label", "Seller tax id", "Doc no",
                   "Category", "Description", "File", "Email"]]
     for rc in receipts:

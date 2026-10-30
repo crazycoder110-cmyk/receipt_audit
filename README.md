@@ -1,8 +1,9 @@
-# 🧾 invoice_audit — AI receipt matching agent
+# invoice_audit — AI receipt matching agent
 
 A LangGraph agent that reads a Gmail inbox (read-only), finds receipts and invoices in **any language and any
 country**, matches them to a card statement (Mynt, Pleo, any bank export), files them in Google Drive and keeps a
-Google Sheet log. The owner only handles the few misses, in one tap each.
+Google Sheet log, and sends matched receipts to the Fortnox inbox. The owner only handles the few misses, in one
+tap each.
 
 ## The agent
 
@@ -18,8 +19,11 @@ flowchart TD
     H -. tool calls .-> TL[tools<br/>gmail_search · read_email · read_attachment<br/>extract_receipt · submit_match]
     TL --> H
     H -. done .-> F
-    R -. all found .-> F[file_receipts<br/><i>Drive + Sheet</i>]
-    F --> E([END])
+    R -. all found .-> F[file_receipts<br/><i>Drive</i>]
+    F -. Fortnox connected .-> FX[send_to_fortnox<br/><i>voucher inbox</i>]
+    F -. no Fortnox .-> W
+    FX --> W[write_log<br/><i>Google Sheet</i>]
+    W --> E([END])
 ```
 
 | Node | What it does | Model |
@@ -30,7 +34,9 @@ flowchart TD
 | `extract_one` | Fan-out with `Send`: reads body, PDF text (pypdfium2) or scans/photos (vision OCR) → strict JSON schema: merchant, date, total, currency, tax (VAT/moms/GST…), seller tax id, doc no | gpt-oss-20b, qwen3.8 vision |
 | `reconcile` | Cheap score (amount › date › name, also original FX amount) auto-matches clear cases; the LLM judges ambiguous ones like an accountant (tips, FX, early bookings) and must give a reason | gpt-oss-120b |
 | `hunter` ⇄ `tools` | ReAct agent with tools, only for what is still missing: thinks where the receipt could be, searches, opens mails/attachments, extracts, `submit_match` updates graph state via `Command` | gpt-oss-120b |
-| `file_receipts` | `Receipts/<year>/<year-month>/<date> <merchant> <amount>.pdf` in Drive + Sheet log | – |
+| `file_receipts` | `Receipts/<year>/<year-month>/<date> <merchant> <amount>.pdf` in Drive | – |
+| `send_to_fortnox` | Matched receipts to the Fortnox voucher inbox (`Inbox_v`), once each; suggestions wait for the owner | – |
+| `write_log` | Google Sheet: every transaction with status, reason, receipt, Drive link, Fortnox status | – |
 
 State is a typed `StateGraph` (`AuditState`) with reducers (`merge` dicts for receipts/matches, `add_messages` for
 the hunter, `operator.add` for the progress log). Google credentials and models are passed as runtime `context`,
@@ -73,6 +79,8 @@ python agent.py path/to/statement.csv 1     # 1 = look back one day
 | [tools.py](tools.py) | Agent tools (`@tool` + `ToolRuntime`), Gmail read-only, PDF/vision reading, Drive + Sheet, rate limiter |
 | [prompts.py](prompts.py) | All LLM instructions (short, language-agnostic) |
 | [app.py](app.py) | Streamlit UI: 3-step onboarding, home screen, one-tap fixes, Swedish/English, live agent log |
+| [fortnox.py](fortnox.py) | Fortnox OAuth2 + upload to the voucher inbox; `python fortnox.py` connects the nightly job |
+| [demo_inbox.py](demo_inbox.py) | Demo receipt emails for the sample statement (`--check` tests them, `--send` mails them) |
 | [sample_mynt_export.csv](sample_mynt_export.csv) | Sample statement in Mynt style (`;`, `1 450,00`, original currency) |
 
 ## Run locally
@@ -93,7 +101,13 @@ streamlit run app.py
      add every tester's Gmail under **Test users**.
    - *Credentials → OAuth client ID → Web application*, redirect URIs `http://localhost:8501` and the deployed URL.
    - Put client ID/secret in `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and set `REDIRECT_URI`.
-3. **Deploy** on Streamlit Community Cloud (share.streamlit.io) with the same keys under *Secrets*.
+   - *Audience → Publish app* ("In production") so any Google account can sign in. Until the app is verified,
+     people see "Google hasn't verified this app" (Advanced → continue) and the project is capped at 100 users.
+     In "Testing" only listed test users can sign in ("Access blocked") and tokens expire after 7 days.
+3. **Fortnox** (optional) – Developer Portal → *My Integrations → Create new integration*, scopes `inbox`,
+   `archive`, `connectfile`, redirect URI = `REDIRECT_URI`. Test against a sandbox (*My sandboxes*). Put the keys in
+   `FORTNOX_CLIENT_ID`, `FORTNOX_CLIENT_SECRET`. Each customer needs a Fortnox integration licence.
+4. **Deploy** on Streamlit Community Cloud (share.streamlit.io) with the same keys under *Secrets*.
    (Vercel is serverless and can't host a long-running Streamlit app.)
 
 ## Design decisions
@@ -122,7 +136,8 @@ streamlit run app.py
 
 ## What I'd build next
 
-1. Fortnox: upload to the Fortnox Inbox (`/archive`) and attach to vouchers (`/voucherfileconnections`).
+1. Fortnox bookkeeping: suggest the BAS account and VAT row, create the voucher after owner approval and attach
+   the receipt (`/vouchers` + `/voucherfileconnections`). Today receipts land in the voucher inbox.
 2. Postgres (EU) + LangGraph checkpointer: persist runs, owner decisions, multi-tenant, resumable nightly jobs.
 3. Outlook / Microsoft 365 and extra inboxes (one click each); Pleo API and open-banking card feeds.
 4. Learn merchant aliases from owner confirmations (`BOLT.EU/O` → Bolt) to raise the auto-match rate.
