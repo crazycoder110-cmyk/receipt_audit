@@ -265,11 +265,13 @@ def score(tx: dict, rc: dict) -> tuple[float, str]:
         rel = diff / max(rc["amount"], 1)
         amount_s = 1.0 if diff <= 0.5 else 0.6 if rel <= 0.05 else 0.3 if rel <= 0.15 else 0.0
         amount_txt = "same amount" if amount_s == 1 else f"amount differs by {diff:.2f}"
-    else:
-        amount_s, amount_txt = 0.3, f"different currency ({rc['currency']})"
+    name_s = name_similarity(tx["merchant"], rc["merchant"])
+    if not amounts:  # amounts can't be compared across currencies, so the brand has to agree (LLM judges the rate)
+        amount_s = 0.3 if name_s >= 0.6 else 0.0
+        rate = f", implied rate {tx['amount'] / rc['amount']:.4g} {tx.get('currency')}/{rc['currency']}" if rc["amount"] else ""
+        amount_txt = f"different currency ({rc['amount']} {rc['currency']}{rate})"
     days = abs((_d(tx["date"]) - _d(rc["date"])).days)
     date_s = 1.0 if days <= 1 else 0.8 if days <= 3 else 0.5 if days <= 7 else 0.2 if days <= 14 else 0.0
-    name_s = name_similarity(tx["merchant"], rc["merchant"])
     total = round(0.5 * amount_s + 0.25 * date_s + 0.25 * name_s, 2)
     return total, f"{amount_txt}, {days} day(s) apart, name similarity {name_s:.0%}"
 

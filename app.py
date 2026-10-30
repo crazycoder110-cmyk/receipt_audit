@@ -609,8 +609,8 @@ with main:
             tx = S["statement"]
             today = dt.date.today()
             first, last = dt.date.fromisoformat(tx[0]["date"]), dt.date.fromisoformat(tx[-1]["date"])
-            since, until = {
-                0: (first - dt.timedelta(days=7), min(last + dt.timedelta(days=3), today)),
+            since, until = {  # bookings are paid before the email; hotel folios and invoices often arrive later
+                0: (first - dt.timedelta(days=7), min(last + dt.timedelta(days=14), today)),
                 1: (today - dt.timedelta(days=1), today),
                 2: (today - dt.timedelta(days=7), today),
             }[T["periods"].index(period)]

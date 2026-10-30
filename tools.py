@@ -216,10 +216,37 @@ def fetch_attachment(creds, msg_id: str, attachment_id: str) -> bytes:
 
 # ---------------------------------------------------------------- PDF + vision
 
+def _page_lines(page) -> str:
+    """Text in visual rows. PDF text order can be column by column (e.g. card statements), which would
+    separate each date from its description and amount."""
+    tp = page.get_textpage()
+    segments = []
+    for i in range(tp.count_rects()):
+        left, bottom, right, top = tp.get_rect(i)
+        text = tp.get_text_bounded(left, bottom, right, top).strip()
+        if text:
+            segments.append(((bottom + top) / 2, left, right, text))
+    rows: list[list] = []
+    for y, *seg in sorted(segments, key=lambda s: (-s[0], s[1])):
+        if rows and abs(rows[-1][0] - y) < 3:
+            rows[-1][1].append(seg)
+        else:
+            rows.append([y, [seg]])
+    lines = []
+    for _, parts in rows:
+        line, prev_right = "", None
+        for left, right, text in sorted(parts):
+            gap = left - prev_right if prev_right is not None else 0
+            line += ("" if gap < 1.5 else " " if gap < 6 else "  ") + text
+            prev_right = right
+        lines.append(line.strip())
+    return "\n".join(lines)
+
+
 def pdf_text(data: bytes, max_pages: int = 3) -> str:
     try:
         pdf = pdfium.PdfDocument(data)
-        return "\n".join(pdf[i].get_textpage().get_text_bounded() for i in range(min(len(pdf), max_pages)))
+        return "\n".join(_page_lines(pdf[i]) for i in range(min(len(pdf), max_pages)))
     except Exception:
         return ""
 

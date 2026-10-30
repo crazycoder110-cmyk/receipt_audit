@@ -16,7 +16,8 @@ EXTRACT = RULES + (" Extract the purchase this email documents. is_financial_doc
                    "incl. tax. tax_amount = total VAT/GST/sales tax. date = purchase date.")
 
 RECONCILE = RULES + (" For each card transaction pick the receipt_id from its candidates, or null. Amount is the "
-                     "strongest signal; tips, FX and fees explain small gaps; bookings can be paid days earlier; "
+                     "strongest signal; tips, FX and fees explain small gaps; a receipt in another currency fits if "
+                     "the implied exchange rate is realistic (card FX fee up to ~3%); bookings can be paid days earlier; "
                      "card descriptors abbreviate brands. One receipt per transaction. confidence>=0.8 only when "
                      "certain; plausible but unsure -> still return it with 0.5-0.79 so the owner confirms. "
                      "reason max 12 words.")
