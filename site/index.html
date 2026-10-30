@@ -17,7 +17,7 @@
   <div class="wrap">
     <nav>
       <a class="brand" href="/"><span class="logo"><svg viewBox="0 0 32 32"><path d="M10 7h12v18l-3-2-3 2-3-2-3 2z" fill="#180F21"/><path d="M13 12h6M13 16h4" stroke="#FFE07A" stroke-width="2" stroke-linecap="round"/></svg></span><b>invoice_audit</b></a>
-      <div class="links"><a href="#problem">The problem</a><a href="#how">How it works</a><a href="#data">Your data</a><a class="btn btn-primary open-app" href="https://receipt-audit.onrender.com">Open the app</a></div>
+      <div class="links"><a href="#problem">The problem</a><a href="#how">How it works</a><a href="#compare">Compare</a><a href="#data">Your data</a><a class="btn btn-primary open-app" href="https://receipt-audit.onrender.com">Open the app</a></div>
     </nav>
   </div>
 </div>
@@ -193,6 +193,97 @@
   </div>
 </section>
 
+<section id="compare">
+  <div class="wrap">
+    <div class="eyebrow">Compared with what exists</div>
+    <h2>Where invoice_audit stands</h2>
+    <p class="lead">Mynt, Fortnox and Pleo already match receipts, but each one only for its own card. Bookkeeping
+      systems give you an inbox to forward receipts to. invoice_audit is one agent for every card and every inbox,
+      and the receipts stay in your own Drive.</p>
+    <div class="cmp-wrap">
+      <table class="cmp">
+        <thead>
+          <tr>
+            <th></th>
+            <th class="us"><span class="cmp-logo us-logo"><svg viewBox="0 0 32 32"><path d="M10 7h12v18l-3-2-3 2-3-2-3 2z" fill="#180F21"/><path d="M13 12h6M13 16h4" stroke="#FFE07A" stroke-width="2" stroke-linecap="round"/></svg></span>invoice_audit</th>
+            <th><img class="cmp-logo" src="/logos/mynt.png" alt="">Mynt</th>
+            <th><img class="cmp-logo" src="/logos/fortnox.png" alt="">Fortnox<small>Företagskort, Kvitto &amp; Utlägg</small></th>
+            <th><img class="cmp-logo" src="/logos/pleo.png" alt="">Pleo<small>with Fetch</small></th>
+            <th><img class="cmp-logo" src="/logos/midday.png" alt="">Midday<small>open source</small></th>
+            <th><img class="cmp-logo" src="/logos/bokio.png" alt="">Bokio</th>
+            <th><img class="cmp-logo" src="/logos/spiris.png" alt="">Spiris<small>formerly Visma Spcs</small></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><th>Works with any company card</th>
+            <td class="us"><i class="y"></i>Mynt, Pleo, Amex, bank cards: any statement export</td>
+            <td><i class="n"></i>Mynt card only</td><td><i class="p"></i>Matching for the Fortnox card; other receipts cost 4.90 kr each</td>
+            <td><i class="n"></i>Pleo card only</td><td><i class="y"></i>Via bank connections</td>
+            <td><i class="p"></i>Bank rows in Bokio</td><td><i class="p"></i>Bank rows in Spiris</td></tr>
+          <tr><th>Finds receipts in your inbox by itself</th>
+            <td class="us"><i class="y"></i>Gmail, read-only</td>
+            <td><i class="y"></i>Says it fetches receipts from email</td><td><i class="n"></i>Photo in the Fortnox app</td>
+            <td><i class="y"></i>Gmail and Outlook</td><td><i class="y"></i>Gmail</td>
+            <td><i class="n"></i>You forward emails to a receipt inbox</td><td><i class="n"></i>You forward emails to a receipt inbox</td></tr>
+          <tr><th>More than one inbox per person</th>
+            <td class="us"><i class="p"></i>Next: one agent across all inboxes</td>
+            <td><i class="q"></i>Not documented</td><td><i class="n"></i>No</td>
+            <td><i class="n"></i>One work email per user</td><td><i class="q"></i>Not documented</td>
+            <td><i class="n"></i>No</td><td><i class="n"></i>No</td></tr>
+          <tr><th>Honest about uncertain matches</th>
+            <td class="us"><i class="y"></i>Confidence and a reason for every match</td>
+            <td><i class="q"></i>Not documented</td><td><i class="q"></i>Not documented</td>
+            <td><i class="y"></i>Unsure receipts wait in an inbox</td><td><i class="y"></i>Confidence shown, you confirm</td>
+            <td><i class="p"></i>Suggests matches on amount and date</td><td><i class="q"></i>Not documented</td></tr>
+          <tr><th>Searches again for missing receipts</th>
+            <td class="us"><i class="y"></i>AI agent does a second, deeper search</td>
+            <td><i class="q"></i>Not documented</td><td><i class="n"></i>No</td>
+            <td><i class="p"></i>Looks back up to a year once</td><td><i class="q"></i>Not documented</td>
+            <td><i class="n"></i>Asks colleagues instead</td><td><i class="n"></i>No</td></tr>
+          <tr><th>Receipts in any language and currency</th>
+            <td class="us"><i class="y"></i>Tested in Swedish, English, German, Hindi; USD to SEK</td>
+            <td><i class="q"></i>Not documented</td><td><i class="p"></i>Reads photos, suggests accounts</td>
+            <td><i class="p"></i>Some vendors still unsupported</td><td><i class="y"></i>AI extraction</td>
+            <td><i class="p"></i>Reads currency on receipts</td><td><i class="q"></i>Not documented</td></tr>
+          <tr><th>Receipts kept in your own Drive</th>
+            <td class="us"><i class="y"></i>Sorted by month, with a Sheet log</td>
+            <td><i class="n"></i>In Mynt</td><td><i class="n"></i>In Fortnox</td><td><i class="n"></i>In Pleo</td>
+            <td><i class="n"></i>In Midday</td><td><i class="n"></i>In Bokio</td><td><i class="n"></i>In Spiris</td></tr>
+          <tr><th>Fortnox</th>
+            <td class="us"><i class="p"></i>Next phase, code ready</td>
+            <td><i class="y"></i>Integration</td><td><i class="y"></i>Built in</td><td><i class="y"></i>Integration</td>
+            <td><i class="p"></i>Integration in beta</td><td><i class="n"></i>Own bookkeeping</td><td><i class="n"></i>Own bookkeeping</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="legend"><span><i class="y"></i>Yes</span><span><i class="p"></i>Partly or planned</span><span><i class="n"></i>No</span><span><i class="q"></i>Not documented publicly</span></div>
+
+    <div class="grid2">
+      <div class="card stand">
+        <div class="eyebrow">Our edge</div>
+        <ul class="checks">
+          <li>One agent for every card and every inbox, instead of one tool per card.</li>
+          <li>Receipts stay in the owner's own Google Drive, ready for the 7-year archive rule.</li>
+          <li>Every match says why, and unsure ones are asked about, never guessed.</li>
+          <li>Simple: sign in, drop a statement, run. Swedish and English.</li>
+        </ul>
+      </div>
+      <div class="card stand">
+        <div class="eyebrow">Not there yet</div>
+        <ul class="todo-list">
+          <li><b>Fortnox upload</b> is built but waits for a Fortnox developer account.</li>
+          <li><b>Microsoft 365 inboxes</b> and several inboxes per user come next.</li>
+          <li><b>Mynt has no public API</b>, so the statement is uploaded once a month.</li>
+          <li><b>Gmail access</b> needs Google's security review (CASA) before more than 100 users.</li>
+          <li><b>Nightly runs</b> and EU hosting for the AI are part of the production setup.</li>
+        </ul>
+      </div>
+    </div>
+    <p class="fine">Based on each company's public website and help pages as of 30 October 2026. Midday has announced
+      it is joining Ramp. Logos are trademarks of their owners and are used only to identify the products compared.</p>
+  </div>
+</section>
+
 <section class="dark" id="data">
   <div class="wrap">
     <div class="eyebrow">Your data</div>
@@ -252,6 +343,8 @@
     clearInterval(t);
     location.href = APP;
   }));
+  // Coming back with the Back button restores this page from the browser cache: hide the loader again.
+  window.addEventListener("pageshow", () => document.getElementById("opening").classList.remove("on"));
 </script>
 </body>
 </html>

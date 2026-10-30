@@ -267,20 +267,24 @@ def _page_lines(page) -> str:
         left, bottom, right, top = tp.get_rect(i)
         text = tp.get_text_bounded(left, bottom, right, top).strip()
         if text:
-            segments.append(((bottom + top) / 2, left, right, text))
-    rows: list[list] = []
-    for y, *seg in sorted(segments, key=lambda s: (-s[0], s[1])):
-        if rows and abs(rows[-1][0] - y) < 3:
-            rows[-1][1].append(seg)
+            segments.append((left, bottom, right, top, text))
+    rows: list[dict] = []  # a piece joins a row when they overlap vertically (letters like g, j, p hang lower)
+    for left, bottom, right, top, text in sorted(segments, key=lambda s: -s[3]):
+        for row in rows:
+            overlap = min(top, row["top"]) - max(bottom, row["bottom"])
+            if overlap > 0.5 * min(top - bottom, row["top"] - row["bottom"]):
+                row["parts"].append((left, right, top - bottom, text))
+                row["top"], row["bottom"] = max(top, row["top"]), min(bottom, row["bottom"])
+                break
         else:
-            rows.append([y, [seg]])
+            rows.append({"top": top, "bottom": bottom, "parts": [(left, right, top - bottom, text)]})
     lines = []
-    for _, parts in rows:
-        line, prev_right = "", None
-        for left, right, text in sorted(parts):
+    for row in sorted(rows, key=lambda r: -r["top"]):
+        line, prev_right, height = "", None, row["top"] - row["bottom"]
+        for left, right, _, text in sorted(row["parts"]):
             gap = left - prev_right if prev_right is not None else 0
-            line += ("" if gap < 1.5 else " " if gap < 6 else "  ") + text
-            prev_right = right
+            line += ("" if gap < 0.15 * height else " " if gap < 1.2 * height else "  ") + text
+            prev_right = max(right, prev_right or right)
         lines.append(line.strip())
     return "\n".join(lines)
 

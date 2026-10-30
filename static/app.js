@@ -3,7 +3,7 @@ const SITE = "https://receipt-audit-site.onrender.com";
 
 const I18N = {
   en: {
-    nav_sub: "Receipt matching agent", hero_eyebrow: "AI receipt assistant",
+    nav_sub: "Receipt matching agent", home: "Home", hero_eyebrow: "AI receipt assistant",
     hero_title: "Every card payment, <em>matched</em> to its receipt.",
     hero_text: "Connect your inbox, add your card statement and let the agent find, match and file every receipt. You only handle the few it cannot find.",
     chips: ["Gmail read-only", "Saved in your own Drive", "Log in Google Sheets", "Any language and currency", "Fortnox next"],
@@ -54,7 +54,7 @@ const I18N = {
     by: { rules: "Rules", LLM: "AI", "hunter agent": "AI search", owner: "You" },
   },
   sv: {
-    nav_sub: "Agent för kvittomatchning", hero_eyebrow: "AI-kvittoassistent",
+    nav_sub: "Agent för kvittomatchning", home: "Startsida", hero_eyebrow: "AI-kvittoassistent",
     hero_title: "Varje kortköp, <em>matchat</em> mot sitt kvitto.",
     hero_text: "Koppla din inkorg, lägg till kortutdraget och låt agenten hitta, matcha och arkivera varje kvitto. Du hanterar bara de få den inte hittar.",
     chips: ["Gmail endast läsning", "Sparas i din egen Drive", "Logg i Google Kalkylark", "Alla språk och valutor", "Fortnox nästa"],
@@ -387,6 +387,7 @@ function wire() {
   $("#restart").onclick = async () => { S = await post("/api/restart"); events = []; render(); };
   $("#forget").onclick = async () => { await post("/api/disconnect"); toast(T.forgotten, "ok"); S = await api("/api/state"); events = []; render(); };
   $("#privacy-link").href = `${SITE}/privacy.html`;
+  $("#home-link").href = SITE;
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") $("#modal").hidden = true; });
 }
 
