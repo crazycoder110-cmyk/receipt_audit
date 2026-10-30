@@ -1,0 +1,39 @@
+# Render Blueprint: Dashboard -> New -> Blueprint -> pick this repo. Creates both services.
+services:
+  # The Streamlit app (agent + UI)
+  - type: web
+    name: receipt-audit
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true
+    healthCheckPath: /_stcore/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: REDIRECT_URI
+        value: https://receipt-audit.onrender.com
+      - key: SITE_URL
+        value: https://receipt-audit-site.onrender.com
+      - key: GROQ_MODEL
+        value: openai/gpt-oss-120b
+      - key: GROQ_FAST_MODEL
+        value: openai/gpt-oss-20b
+      # secrets: Render asks for these when the Blueprint is created
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: FORTNOX_CLIENT_ID
+        sync: false
+      - key: FORTNOX_CLIENT_SECRET
+        sync: false
+
+  # Public home page, privacy policy and terms (needed for Google OAuth branding)
+  - type: web
+    name: receipt-audit-site
+    runtime: static
+    buildCommand: echo "static site, nothing to build"
+    staticPublishPath: ./site

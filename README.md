@@ -107,8 +107,11 @@ streamlit run app.py
 3. **Fortnox** (optional) – Developer Portal → *My Integrations → Create new integration*, scopes `inbox`,
    `archive`, `connectfile`, redirect URI = `REDIRECT_URI`. Test against a sandbox (*My sandboxes*). Put the keys in
    `FORTNOX_CLIENT_ID`, `FORTNOX_CLIENT_SECRET`. Each customer needs a Fortnox integration licence.
-4. **Deploy** on Streamlit Community Cloud (share.streamlit.io) with the same keys under *Secrets*.
-   (Vercel is serverless and can't host a long-running Streamlit app.)
+4. **Deploy** on Render with [render.yaml](render.yaml) (*New → Blueprint*): a Python web service for the app
+   (`receipt-audit.onrender.com`) and a static site for the home page, privacy policy and terms
+   (`receipt-audit-site.onrender.com`, from [site/](site/)), which Google's OAuth branding page asks for.
+   Add the app URL as a redirect URI in Google Cloud. Streamlit Community Cloud also works (keys under *Secrets*);
+   serverless hosts like Vercel can't run a long-lived Streamlit server.
 
 ## Design decisions
 

@@ -257,7 +257,7 @@ button[data-baseweb="tab"] p {font-weight:600;}
 ss = st.session_state
 GROQ_KEY = cfg("GROQ_API_KEY")
 REDIRECT = cfg("REDIRECT_URI", "http://localhost:8501")
-SITE = cfg("SITE_URL", "https://receipt-audit.vercel.app")  # home page, privacy policy and terms (site/)
+SITE = cfg("SITE_URL", "https://receipt-audit-site.onrender.com")  # home page, privacy policy and terms (site/)
 NEEDED_SCOPES = {"https://www.googleapis.com/auth/gmail.readonly", "https://www.googleapis.com/auth/drive.file"}
 
 
@@ -647,5 +647,5 @@ with side:
     with st.container(key="card_privacy"):
         h(st, f"<div class='eyebrow'>{T['privacy_title']}</div><ul class='plist'>"
               + "".join(f"<li>{line}</li>" for line in T["privacy"]) + "</ul>"
-              f"<div class='muted'><a href='{SITE}/privacy' target='_blank'>{T['policy']}</a> &middot; "
-              f"<a href='{SITE}/terms' target='_blank'>{T['terms']}</a></div>")
+              f"<div class='muted'><a href='{SITE}/privacy.html' target='_blank'>{T['policy']}</a> &middot; "
+              f"<a href='{SITE}/terms.html' target='_blank'>{T['terms']}</a></div>")
