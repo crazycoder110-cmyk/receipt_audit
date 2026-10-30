@@ -78,7 +78,10 @@ python agent.py path/to/statement.csv 1     # 1 = look back one day
 | [agent.py](agent.py) | LangGraph `StateGraph`: state, nodes, routing, reconcile logic, statement reader, `run()`, CLI |
 | [tools.py](tools.py) | Agent tools (`@tool` + `ToolRuntime`), Gmail read-only, PDF/vision reading, Drive + Sheet, rate limiter |
 | [prompts.py](prompts.py) | All LLM instructions (short, language-agnostic) |
-| [app.py](app.py) | Streamlit UI: 3-step onboarding, home screen, one-tap fixes, Swedish/English, live agent log |
+| [server.py](server.py) | FastAPI backend: Google/Fortnox sign-in, statement upload, runs the agent in the background, one-tap fixes |
+| [static/](static/) | HTML app (no framework): onboarding, live progress and activity log, results, Swedish/English |
+| [demo_data.py](demo_data.py) | Sample receipts for "Try with sample data" |
+| [site/](site/) | Public home page, privacy policy and terms (needed for Google OAuth branding) |
 | [fortnox.py](fortnox.py) | Fortnox OAuth2 + upload to the voucher inbox; `python fortnox.py` connects the nightly job |
 | [demo_inbox.py](demo_inbox.py) | Demo receipt emails for the sample statement (`--check` tests them, `--send` mails them) |
 | [sample_mynt_export.csv](sample_mynt_export.csv) | Sample statement in Mynt style (`;`, `1 450,00`, original currency) |
@@ -89,7 +92,7 @@ python agent.py path/to/statement.csv 1     # 1 = look back one day
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env        # fill in the keys
-streamlit run app.py
+uvicorn server:app --port 8501   # open http://localhost:8501
 ```
 
 ## Setup (one time)
@@ -110,8 +113,8 @@ streamlit run app.py
 4. **Deploy** on Render with [render.yaml](render.yaml) (*New → Blueprint*): a Python web service for the app
    (`receipt-audit.onrender.com`) and a static site for the home page, privacy policy and terms
    (`receipt-audit-site.onrender.com`, from [site/](site/)), which Google's OAuth branding page asks for.
-   Add the app URL as a redirect URI in Google Cloud. Streamlit Community Cloud also works (keys under *Secrets*);
-   serverless hosts like Vercel can't run a long-lived Streamlit server.
+   Add the app URL as a redirect URI in Google Cloud. The agent runs in a background thread for a minute or two,
+   so it needs a long-running server; serverless hosts like Vercel are not a fit.
 
 ## Design decisions
 

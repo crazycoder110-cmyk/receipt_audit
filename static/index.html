@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>invoice_audit</title>
+  <meta name="description" content="Card transactions matched to receipts from your inbox.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/app.css?v=1">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23180F21'/%3E%3Cpath d='M10 8h12v16l-3-2-3 2-3-2-3 2z' fill='%23FFE07A'/%3E%3C/svg%3E">
+</head>
+<body>
+
+<!-- first paint: shown until the backend answers (Render free instances can take a while to wake up) -->
+<div id="boot" class="boot">
+  <div class="boot-art">
+    <svg viewBox="0 0 120 150" class="boot-receipt" aria-hidden="true">
+      <path d="M14 8h92v130l-11.5-8-11.5 8-11.5-8-11.5 8-11.5-8-11.5 8-11.5-8-11.5 8z" fill="#FBF7F1"/>
+      <rect class="ln l1" x="28" y="30" width="64" height="7" rx="3.5"/>
+      <rect class="ln l2" x="28" y="48" width="44" height="7" rx="3.5"/>
+      <rect class="ln l3" x="28" y="66" width="56" height="7" rx="3.5"/>
+      <rect class="ln l4" x="28" y="92" width="64" height="9" rx="4.5"/>
+      <rect class="scan" x="8" y="20" width="104" height="5" rx="2.5"/>
+    </svg>
+  </div>
+  <div class="boot-name">invoice_audit</div>
+  <div class="boot-msg" id="boot-msg">Starting the agent</div>
+  <div class="boot-bar"><span></span></div>
+</div>
+
+<header class="topbar">
+  <a class="brand" href="/">
+    <span class="logo"><svg viewBox="0 0 32 32"><path d="M10 7h12v18l-3-2-3 2-3-2-3 2z" fill="#180F21"/><path d="M13 12h6M13 16h4" stroke="#FFE07A" stroke-width="2" stroke-linecap="round"/></svg></span>
+    <span><b>invoice_audit</b><small data-i18n="nav_sub">Receipt matching agent</small></span>
+  </a>
+  <div class="top-right">
+    <div class="seg" id="lang">
+      <button data-lang="en">EN</button><button data-lang="sv">SV</button>
+    </div>
+    <div id="account"></div>
+  </div>
+</header>
+
+<main id="app">
+  <!-- ONBOARDING -->
+  <section id="view-onboard" class="view">
+    <div class="hero">
+      <div class="hero-text">
+        <div class="eyebrow" data-i18n="hero_eyebrow">AI receipt assistant</div>
+        <h1 data-i18n-html="hero_title">Every card payment, <em>matched</em> to its receipt.</h1>
+        <p data-i18n="hero_text">Connect your inbox, add your card statement and let the agent find, match and file every receipt. You only handle the few it cannot find.</p>
+        <div class="chips" id="hero-chips"></div>
+      </div>
+      <div class="hero-art" aria-hidden="true">
+        <svg viewBox="0 0 460 300">
+          <rect x="18" y="38" width="190" height="224" rx="18" fill="#2B1745"/>
+          <text x="40" y="72" fill="#D3C8D8" font-size="13" font-weight="700" letter-spacing="1.5">CARD STATEMENT</text>
+          <g font-size="12" fill="#FBF7F1">
+            <rect x="34" y="88" width="158" height="30" rx="8" fill="#3a2458"/><text x="46" y="108">VY NKPG</text><text x="180" y="108" text-anchor="end">420.00</text>
+            <rect x="34" y="126" width="158" height="30" rx="8" fill="#3a2458"/><text x="46" y="146">DROPBOX*</text><text x="180" y="146" text-anchor="end">1 363.28</text>
+            <rect x="34" y="164" width="158" height="30" rx="8" fill="#3a2458"/><text x="46" y="184">ANTHROPIC*</text><text x="180" y="184" text-anchor="end">255.23</text>
+            <rect x="34" y="202" width="158" height="30" rx="8" fill="#3a2458" stroke="#FF6B35" stroke-dasharray="4 4"/><text x="46" y="222">PARKERING</text><text x="180" y="222" text-anchor="end">60.00</text>
+          </g>
+          <g class="links" stroke="#FFE07A" stroke-width="2.5" fill="none" stroke-linecap="round">
+            <path d="M192 103 C 240 103, 240 70, 282 70"/><path d="M192 141 C 240 141, 240 140, 282 140"/><path d="M192 179 C 240 179, 240 210, 282 210"/>
+          </g>
+          <g>
+            <rect x="282" y="44" width="160" height="54" rx="12" fill="#FBF7F1"/><text x="298" y="66" font-size="12" font-weight="700" fill="#180F21">Vy · kvitto</text><text x="298" y="86" font-size="11" fill="#6E6C66">420,00 kr · moms 6%</text><circle cx="420" cy="71" r="10" fill="#1F7A4D"/><path d="M415 71l3.5 3.5 6-7" stroke="#fff" stroke-width="2.2" fill="none"/>
+            <rect x="282" y="113" width="160" height="54" rx="12" fill="#FBF7F1"/><text x="298" y="135" font-size="12" font-weight="700" fill="#180F21">Dropbox · receipt</text><text x="298" y="155" font-size="11" fill="#6E6C66">SEK 1 363.28 · PDF</text><circle cx="420" cy="140" r="10" fill="#1F7A4D"/><path d="M415 140l3.5 3.5 6-7" stroke="#fff" stroke-width="2.2" fill="none"/>
+            <rect x="282" y="183" width="160" height="54" rx="12" fill="#FBF7F1"/><text x="298" y="205" font-size="12" font-weight="700" fill="#180F21">Anthropic · receipt</text><text x="298" y="225" font-size="11" fill="#6E6C66">USD 25.00 · FX ok</text><circle cx="420" cy="210" r="10" fill="#1F7A4D"/><path d="M415 210l3.5 3.5 6-7" stroke="#fff" stroke-width="2.2" fill="none"/>
+          </g>
+          <rect x="282" y="252" width="160" height="34" rx="10" fill="#FF6B35"/><text x="362" y="274" text-anchor="middle" font-size="12" font-weight="700" fill="#180F21">1 missing · one tap</text>
+        </svg>
+      </div>
+    </div>
+
+    <div class="wrap">
+      <div class="steps">
+        <article class="card step" id="step1">
+          <div class="step-head"><span class="num">1</span><h3 data-i18n="step1">Connect your inbox</h3><span class="tag" id="step1-tag"></span></div>
+          <p class="muted" data-i18n="google_hint">Reads Gmail (read-only) and saves receipts in your own Google Drive.</p>
+          <div id="step1-body"></div>
+        </article>
+        <article class="card step" id="step2">
+          <div class="step-head"><span class="num">2</span><h3 data-i18n="step2">Add your card statement</h3><span class="tag" id="step2-tag"></span></div>
+          <p class="muted" data-i18n="upload_hint">Any card or bank export: CSV, Excel or PDF. Mynt, Pleo, any bank.</p>
+          <label class="drop" id="drop">
+            <input type="file" id="statement-file" accept=".csv,.xlsx,.xls,.pdf">
+            <span class="drop-icon"><svg viewBox="0 0 24 24"><path d="M12 16V4m0 0l-4 4m4-4l4 4M4 16v3a1 1 0 001 1h14a1 1 0 001-1v-3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            <span class="drop-text"><b data-i18n="drop_title">Drop your statement here</b><small data-i18n="drop_sub">or click to choose a file</small></span>
+            <span class="drop-busy"><span class="scanbar"></span><b id="drop-busy-msg">Reading your statement</b></span>
+          </label>
+          <button class="btn btn-ghost full" id="use-sample" data-i18n="sample">Use the sample Mynt export</button>
+          <div id="statement-summary"></div>
+        </article>
+        <article class="card step" id="step3">
+          <div class="step-head"><span class="num">3</span><h3 data-i18n="step3">Run the agent</h3></div>
+          <p class="muted" data-i18n="period">Look for receipts from</p>
+          <div class="seg seg-wide" id="period"></div>
+          <p class="note" data-i18n="nightly">This is the job the agent runs every night. Run it now to see it work.</p>
+          <button class="btn btn-primary btn-lg full" id="run" data-i18n="run">Run agent now</button>
+        </article>
+      </div>
+
+      <div class="how card">
+        <div class="how-head"><div class="eyebrow" data-i18n="how_eyebrow">How it works</div><h2 data-i18n="how_title">What happens when you run it</h2></div>
+        <ol class="flow" id="flow"></ol>
+      </div>
+      <div class="privacy">
+        <span data-i18n="privacy_1">Email access is read-only.</span>
+        <span data-i18n="privacy_2">Receipts are stored in your own Google Drive.</span>
+        <span data-i18n="privacy_3">Disconnect at any time. Nothing stays on our side.</span>
+        <a id="privacy-link" target="_blank" data-i18n="policy">Privacy policy</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- RUNNING -->
+  <section id="view-run" class="view" hidden>
+    <div class="band">
+      <div class="band-inner">
+        <div class="eyebrow" data-i18n="run_eyebrow">Agent at work</div>
+        <h1 id="run-title" data-i18n="run_title">Finding and matching your receipts</h1>
+        <p id="run-tip" class="tip"></p>
+        <div class="indeterminate"><span></span></div>
+        <div class="band-meta"><span id="run-elapsed">0:00</span></div>
+      </div>
+    </div>
+    <div class="wrap grid-run">
+      <div class="card">
+        <h3 class="card-title" data-i18n="progress">Progress</h3>
+        <ol class="stepper" id="stepper"></ol>
+      </div>
+      <div class="card">
+        <div class="card-title-row"><h3 class="card-title" data-i18n="activity">Activity</h3><span class="live"><i></i><span data-i18n="live">Live</span></span></div>
+        <ul class="feed" id="feed"></ul>
+        <div id="run-error"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- RESULTS -->
+  <section id="view-result" class="view" hidden>
+    <div class="band">
+      <div class="band-inner band-split">
+        <div>
+          <div class="eyebrow" id="res-eyebrow"></div>
+          <h1 id="res-title"></h1>
+          <p id="res-sub" class="tip"></p>
+          <div class="bar"><span id="res-bar"></span></div>
+        </div>
+        <div class="band-actions" id="res-actions"></div>
+      </div>
+    </div>
+    <div class="wrap">
+      <div class="stats" id="stats"></div>
+      <div class="grid-res">
+        <div>
+          <div class="section-head"><h2 id="todo-title"></h2></div>
+          <div id="todo"></div>
+        </div>
+        <aside>
+          <div class="card">
+            <h3 class="card-title" data-i18n="connections">Connections</h3>
+            <div id="connections"></div>
+          </div>
+          <div class="card">
+            <div class="card-title-row"><h3 class="card-title" data-i18n="activity">Activity</h3><button class="link" id="log-toggle" data-i18n="show_all">Show all</button></div>
+            <ul class="feed feed-compact" id="res-feed"></ul>
+          </div>
+        </aside>
+      </div>
+      <div class="card table-card">
+        <div class="table-head">
+          <h2 data-i18n="tab_all">All transactions</h2>
+          <div class="filters" id="filters"></div>
+          <input class="search" id="search" type="search" data-i18n-ph="search" placeholder="Search">
+        </div>
+        <div class="table-wrap"><table id="table"></table></div>
+      </div>
+      <div class="card" id="orphans-card" hidden>
+        <h2 data-i18n="orphans">Receipts with no card transaction</h2>
+        <p class="muted" data-i18n="orphans_hint">Found in your inbox but not on this statement. Paid with another card?</p>
+        <ul class="orphans" id="orphans"></ul>
+      </div>
+      <div class="foot-actions">
+        <button class="btn btn-ghost" id="restart" data-i18n="restart">New run</button>
+        <button class="btn btn-danger-ghost" id="forget" data-i18n="forget">Disconnect and delete my data</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="toasts" class="toasts"></div>
+<div id="modal" class="modal" hidden></div>
+<script src="/static/app.js?v=1"></script>
+</body>
+</html>

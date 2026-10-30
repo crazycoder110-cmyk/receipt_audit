@@ -1,13 +1,13 @@
 # Render Blueprint: Dashboard -> New -> Blueprint -> pick this repo. Creates both services.
 services:
-  # The Streamlit app (agent + UI)
+  # The app: FastAPI backend (server.py) + HTML front end (static/)
   - type: web
     name: receipt-audit
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: streamlit run app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true
-    healthCheckPath: /_stcore/health
+    startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.7

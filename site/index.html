@@ -7,52 +7,251 @@
   <title>invoice_audit - receipts matched to card payments</title>
   <meta name="description" content="invoice_audit finds receipts in your Gmail, matches them to your card statement and files them in your own Google Drive.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/style.css">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css?v=2">
+  <link rel="preconnect" href="https://receipt-audit.onrender.com">
 </head>
 <body>
-<div class="wrap">
-  <nav>
-    <a class="brand" href="/"><span class="logo">IA</span><b>invoice_audit</b></a>
-    <div class="links"><a href="#how">How it works</a><a href="#data">Your data</a><a href="/privacy.html">Privacy</a><a href="/terms.html">Terms</a></div>
-  </nav>
+<div class="top">
+  <div class="wrap">
+    <nav>
+      <a class="brand" href="/"><span class="logo"><svg viewBox="0 0 32 32"><path d="M10 7h12v18l-3-2-3 2-3-2-3 2z" fill="#180F21"/><path d="M13 12h6M13 16h4" stroke="#FFE07A" stroke-width="2" stroke-linecap="round"/></svg></span><b>invoice_audit</b></a>
+      <div class="links"><a href="#problem">The problem</a><a href="#how">How it works</a><a href="#data">Your data</a><a class="btn btn-primary open-app" href="https://receipt-audit.onrender.com">Open the app</a></div>
+    </nav>
+  </div>
+</div>
 
-  <div class="hero">
-    <div class="eyebrow">AI receipt assistant</div>
-    <h1>Every card payment, matched to its receipt.</h1>
-    <p>invoice_audit reads your inbox, finds receipts and invoices in any language, matches them to your company card
-      statement and files them in your own Google Drive with a log in Google Sheets. You only handle the few it cannot find.</p>
-    <div class="actions">
-      <a class="btn light" href="https://receipt-audit.onrender.com">Open the app</a>
-      <a class="btn ghost" href="#data">How we use your data</a>
+<header class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <div class="eyebrow" style="color:var(--khaki)">For busy entrepreneurs</div>
+      <h1>You run a business. Not a <em>receipt hunt.</em></h1>
+      <p>Every card payment needs a receipt for the books. invoice_audit finds them in your email, matches each one to
+        your card statement and files it in your Google Drive. You only handle the one or two it cannot find.</p>
+      <div class="actions">
+        <a class="btn btn-primary open-app" href="https://receipt-audit.onrender.com">Open the app</a>
+        <a class="btn btn-ghost" href="#how">See how it works</a>
+      </div>
+    </div>
+    <!-- hero cartoon: the owner relaxes while the agent sorts the receipts -->
+    <svg viewBox="0 0 560 460" role="img" aria-label="An entrepreneur drinks coffee while a friendly robot files receipts from the laptop into a folder">
+      <ellipse cx="290" cy="436" rx="230" ry="14" fill="#2B1745"/>
+      <g fill="#FFE07A"><path class="float" d="M84 96l4 10 10 4-10 4-4 10-4-10-10-4 10-4z"/><path class="float d2" d="M520 70l3 7 7 3-7 3-3 7-3-7-7-3 7-3z"/><path class="float d3" d="M230 40l3 7 7 3-7 3-3 7-3-7-7-3 7-3z"/></g>
+      <!-- flying envelopes -->
+      <g class="float"><rect x="226" y="96" width="46" height="32" rx="6" fill="#FBF7F1"/><path d="M228 99l21 16 21-16" stroke="#5A4880" stroke-width="2.5" fill="none"/></g>
+      <g class="float d2"><rect x="300" y="58" width="46" height="32" rx="6" fill="#FBF7F1"/><path d="M302 61l21 16 21-16" stroke="#5A4880" stroke-width="2.5" fill="none"/><circle cx="342" cy="60" r="8" fill="#FF6B35"/></g>
+      <g class="float d3"><rect x="358" y="104" width="46" height="32" rx="6" fill="#FBF7F1"/><path d="M360 107l21 16 21-16" stroke="#5A4880" stroke-width="2.5" fill="none"/></g>
+      <path d="M330 226 C 330 170, 380 150, 412 168" stroke="#FFE07A" stroke-width="3" stroke-dasharray="6 8" fill="none" stroke-linecap="round"/>
+      <!-- desk -->
+      <rect x="62" y="330" width="452" height="16" rx="8" fill="#3A2458"/>
+      <rect x="96" y="346" width="12" height="84" rx="5" fill="#3A2458"/><rect x="470" y="346" width="12" height="84" rx="5" fill="#3A2458"/>
+      <!-- person -->
+      <rect x="92" y="232" width="26" height="112" rx="12" fill="#5A4880"/>
+      <path d="M118 332 Q116 252 162 246 Q208 250 208 332 Z" fill="#FF6B35"/>
+      <rect x="154" y="228" width="16" height="22" rx="6" fill="#F4C7A1"/>
+      <circle cx="162" cy="204" r="33" fill="#F4C7A1"/>
+      <path d="M128 202 Q128 164 166 166 Q198 168 196 204 Q186 184 162 188 Q140 190 128 202Z" fill="#180F21"/>
+      <path d="M146 208q6-6 12 0M168 208q6-6 12 0" stroke="#180F21" stroke-width="3" fill="none" stroke-linecap="round"/>
+      <path d="M152 221q10 8 20 0" stroke="#180F21" stroke-width="3" fill="none" stroke-linecap="round"/>
+      <circle cx="144" cy="219" r="5" fill="#FF9BAE" opacity=".6"/><circle cx="182" cy="219" r="5" fill="#FF9BAE" opacity=".6"/>
+      <path d="M198 268 Q232 276 226 300" stroke="#FF6B35" stroke-width="17" fill="none" stroke-linecap="round"/>
+      <rect x="212" y="280" width="26" height="30" rx="5" fill="#FBF7F1"/><path d="M238 287q10 0 10 8t-10 8" stroke="#FBF7F1" stroke-width="4" fill="none"/>
+      <circle cx="222" cy="304" r="9" fill="#F4C7A1"/>
+      <g class="float" stroke="#D3C8D8" stroke-width="3" fill="none" stroke-linecap="round"><path d="M220 270q-6-8 0-16"/><path d="M230 270q-6-8 0-16"/></g>
+      <!-- laptop -->
+      <rect x="262" y="232" width="128" height="92" rx="9" fill="#FBF7F1"/>
+      <rect x="276" y="250" width="70" height="9" rx="4.5" fill="#D3C8D8"/><rect x="276" y="267" width="98" height="9" rx="4.5" fill="#FFE07A"/><rect x="276" y="284" width="54" height="9" rx="4.5" fill="#D3C8D8"/>
+      <rect x="248" y="322" width="156" height="10" rx="5" fill="#D3C8D8"/>
+      <!-- robot -->
+      <g class="float">
+        <line x1="456" y1="150" x2="456" y2="130" stroke="#FBF7F1" stroke-width="4"/><circle cx="456" cy="124" r="8" fill="#FF6B35"/>
+        <rect x="418" y="150" width="76" height="60" rx="20" fill="#FFE07A"/>
+        <circle cx="442" cy="178" r="7" fill="#180F21"/><circle cx="470" cy="178" r="7" fill="#180F21"/>
+        <circle cx="444" cy="176" r="2.2" fill="#fff"/><circle cx="472" cy="176" r="2.2" fill="#fff"/>
+        <path d="M444 194q12 9 24 0" stroke="#180F21" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+        <rect x="410" y="214" width="92" height="74" rx="22" fill="#5A4880"/>
+        <circle cx="456" cy="250" r="12" fill="#2B1745"/><circle cx="456" cy="250" r="5" fill="#52E0A8"/>
+        <path d="M412 238 Q394 242 398 256" stroke="#5A4880" stroke-width="13" fill="none" stroke-linecap="round"/>
+        <path d="M352 212h44v62l-7.3-5-7.3 5-7.3-5-7.3 5-7.3-5-7.5 5z" fill="#FBF7F1"/>
+        <rect x="360" y="224" width="28" height="5" rx="2.5" fill="#D3C8D8"/><rect x="360" y="235" width="20" height="5" rx="2.5" fill="#D3C8D8"/><rect x="360" y="248" width="28" height="6" rx="3" fill="#FFE07A"/>
+        <circle cx="394" cy="214" r="11" fill="#1F7A4D"/><path d="M388.5 214l3.8 3.8 6.4-7" stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+      </g>
+      <!-- folder -->
+      <path d="M420 298h30l9 8h46v24h-85z" fill="#FFE07A"/><rect x="420" y="306" width="85" height="24" rx="3" fill="#FFE797"/>
+      <text x="462" y="323" text-anchor="middle" font-size="10" font-weight="800" fill="#180F21" font-family="Plus Jakarta Sans, sans-serif">RECEIPTS</text>
+    </svg>
+  </div>
+</header>
+
+<section id="problem">
+  <div class="wrap">
+    <div class="eyebrow">The problem</div>
+    <h2>Receipts are a small job that eats your week</h2>
+    <p class="lead">Your accountant needs a receipt for every card payment. But the receipts are spread across your
+      email, in different formats and languages. Finding them is slow, boring and easy to forget.</p>
+    <div class="grid3">
+      <div class="card">
+        <div class="art"><svg viewBox="0 0 200 140" aria-hidden="true">
+          <path d="M30 86h140l-14 40H44z" fill="#5A4880"/><path d="M30 86h40l8 12h44l8-12h40" stroke="#2B1745" stroke-width="3" fill="none"/>
+          <g transform="rotate(-12 70 56)"><rect x="46" y="38" width="50" height="34" rx="6" fill="#fff" stroke="#D3C8D8" stroke-width="2"/><path d="M48 41l23 17 23-17" stroke="#5A4880" stroke-width="2.4" fill="none"/></g>
+          <g transform="rotate(9 128 50)"><rect x="104" y="32" width="50" height="34" rx="6" fill="#fff" stroke="#D3C8D8" stroke-width="2"/><path d="M106 35l23 17 23-17" stroke="#5A4880" stroke-width="2.4" fill="none"/></g>
+          <g transform="rotate(-4 98 70)"><rect x="74" y="56" width="50" height="34" rx="6" fill="#fff" stroke="#D3C8D8" stroke-width="2"/><path d="M76 59l23 17 23-17" stroke="#5A4880" stroke-width="2.4" fill="none"/></g>
+          <circle cx="152" cy="30" r="13" fill="#FF6B35"/><text x="152" y="35" text-anchor="middle" font-size="13" font-weight="800" fill="#fff" font-family="sans-serif">99</text>
+        </svg></div>
+        <h3>Receipts everywhere</h3>
+        <p>Hotel bills, taxi rides, software subscriptions. Each lands in a different email, some as PDFs, some in the email text.</p>
+      </div>
+      <div class="card">
+        <div class="art"><svg viewBox="0 0 200 140" aria-hidden="true">
+          <rect x="34" y="28" width="86" height="92" rx="10" fill="#fff" stroke="#D3C8D8" stroke-width="2"/>
+          <rect x="34" y="28" width="86" height="22" rx="10" fill="#FF6B35"/><rect x="34" y="40" width="86" height="10" fill="#FF6B35"/>
+          <text x="77" y="98" text-anchor="middle" font-size="40" font-weight="800" fill="#180F21" font-family="sans-serif">31</text>
+          <circle cx="77" cy="85" r="27" fill="none" stroke="#FF6B35" stroke-width="3" stroke-dasharray="4 4"/>
+          <circle cx="146" cy="78" r="30" fill="#FFE07A"/><circle cx="146" cy="78" r="23" fill="#fff"/>
+          <path d="M146 78V62M146 78l11 7" stroke="#180F21" stroke-width="3.5" stroke-linecap="round"/>
+        </svg></div>
+        <h3>Month-end rush</h3>
+        <p>At the end of the month you go through your inbox line by line, card statement in one hand, to find what belongs where.</p>
+      </div>
+      <div class="card">
+        <div class="art"><svg viewBox="0 0 200 140" aria-hidden="true">
+          <path d="M62 22h62v96l-10.3-7-10.3 7-10.3-7-10.3 7-10.3-7-10.5 7z" fill="#fff" stroke="#D3C8D8" stroke-width="2"/>
+          <text x="93" y="84" text-anchor="middle" font-size="48" font-weight="800" fill="#B3261E" font-family="sans-serif">?</text>
+          <g><ellipse cx="150" cy="104" rx="20" ry="7" fill="#B39D55"/><rect x="130" y="90" width="40" height="14" fill="#FFE07A"/><ellipse cx="150" cy="90" rx="20" ry="7" fill="#FFE797"/></g>
+          <g><ellipse cx="150" cy="80" rx="20" ry="7" fill="#B39D55"/><rect x="130" y="66" width="40" height="14" fill="#FFE07A"/><ellipse cx="150" cy="66" rx="20" ry="7" fill="#FFE797"/></g>
+          <path d="M40 60l-12 12M28 60l12 12" stroke="#B3261E" stroke-width="4" stroke-linecap="round"/>
+        </svg></div>
+        <h3>Missing receipts cost money</h3>
+        <p>Without a receipt you cannot deduct the VAT, and your accountant keeps asking. Small amounts add up over a year.</p>
+      </div>
     </div>
   </div>
+</section>
 
-  <section id="how">
-    <h2>How it works</h2>
-    <div class="grid">
-      <div class="card"><span class="num">1</span><h3>Connect</h3><p>Sign in with Google. Gmail access is read-only; receipts are saved in a folder in your own Drive.</p></div>
-      <div class="card"><span class="num">2</span><h3>Add your statement</h3><p>Upload a card or bank export (CSV, Excel or PDF), for example from Mynt.</p></div>
-      <div class="card"><span class="num">3</span><h3>Run</h3><p>The agent finds, reads and matches receipts, and asks you only about the ones it could not find.</p></div>
+<section class="dark" id="solution">
+  <div class="wrap split">
+    <div>
+      <div class="eyebrow">What invoice_audit does</div>
+      <h2>An assistant that does the receipt work for you</h2>
+      <p class="lead">Think of it as a careful assistant who reads your email every night, but is never allowed to send,
+        change or delete anything.</p>
+      <ul class="checks">
+        <li>Finds receipts and invoices in your Gmail, in any language and currency.</li>
+        <li>Matches each one to the right payment on your card statement, and says why.</li>
+        <li>Saves them in your own Google Drive, sorted by month, with a log in Google Sheets.</li>
+        <li>Asks you only about the few it cannot find: confirm, add a photo, or mark "no receipt".</li>
+        <li>Next: sends them straight to Fortnox for your accountant.</li>
+      </ul>
     </div>
-  </section>
+    <svg viewBox="0 0 560 380" role="img" aria-label="Card statement and inbox go into the agent, which files receipts in Drive, a Sheet and later Fortnox">
+      <rect x="10" y="40" width="170" height="130" rx="18" fill="#2B1745"/>
+      <text x="30" y="72" font-size="13" font-weight="800" fill="#D3C8D8" letter-spacing="1" font-family="sans-serif">CARD STATEMENT</text>
+      <g fill="#3A2458"><rect x="26" y="86" width="138" height="20" rx="6"/><rect x="26" y="112" width="138" height="20" rx="6"/><rect x="26" y="138" width="138" height="20" rx="6"/></g>
+      <g fill="#FBF7F1" font-size="11" font-family="sans-serif"><text x="36" y="100">VY NKPG</text><text x="154" y="100" text-anchor="end">420.00</text><text x="36" y="126">DROPBOX*</text><text x="154" y="126" text-anchor="end">1 363.28</text><text x="36" y="152">BERGS GARD</text><text x="154" y="152" text-anchor="end">1 375.00</text></g>
+      <rect x="10" y="210" width="170" height="130" rx="18" fill="#2B1745"/>
+      <text x="30" y="242" font-size="13" font-weight="800" fill="#D3C8D8" letter-spacing="1" font-family="sans-serif">YOUR INBOX</text>
+      <g><rect x="26" y="256" width="62" height="40" rx="7" fill="#FBF7F1"/><path d="M28 259l29 20 29-20" stroke="#5A4880" stroke-width="2.4" fill="none"/>
+        <rect x="102" y="256" width="62" height="40" rx="7" fill="#FBF7F1"/><path d="M104 259l29 20 29-20" stroke="#5A4880" stroke-width="2.4" fill="none"/>
+        <rect x="26" y="304" width="62" height="24" rx="6" fill="#5A4880"/><rect x="102" y="304" width="62" height="24" rx="6" fill="#5A4880"/></g>
+      <path d="M182 105 C 230 105, 230 180, 250 186" stroke="#FFE07A" stroke-width="3" fill="none" stroke-dasharray="6 7"/>
+      <path d="M182 275 C 230 275, 230 200, 250 194" stroke="#FFE07A" stroke-width="3" fill="none" stroke-dasharray="6 7"/>
+      <circle cx="300" cy="190" r="52" fill="#FFE07A"/>
+      <rect x="272" y="168" width="56" height="42" rx="14" fill="#180F21"/>
+      <circle cx="289" cy="187" r="6" fill="#52E0A8"/><circle cx="311" cy="187" r="6" fill="#52E0A8"/>
+      <path d="M290 200q10 7 20 0" stroke="#52E0A8" stroke-width="3" fill="none" stroke-linecap="round"/>
+      <line x1="300" y1="168" x2="300" y2="154" stroke="#180F21" stroke-width="4"/><circle cx="300" cy="150" r="6" fill="#FF6B35"/>
+      <text x="300" y="262" text-anchor="middle" font-size="13" font-weight="800" fill="#FFE07A" font-family="sans-serif">THE AGENT</text>
+      <path d="M352 190 C 380 190, 380 92, 400 92" stroke="#FFE07A" stroke-width="3" fill="none"/>
+      <path d="M352 190 H 400" stroke="#FFE07A" stroke-width="3" fill="none"/>
+      <path d="M352 190 C 380 190, 380 290, 400 290" stroke="#8A7FA0" stroke-width="3" fill="none" stroke-dasharray="6 7"/>
+      <rect x="400" y="60" width="150" height="64" rx="16" fill="#FBF7F1"/>
+      <path d="M418 78h16l5 5h22v24h-43z" fill="#FFE07A"/><text x="474" y="90" font-size="13" font-weight="800" fill="#180F21" font-family="sans-serif">Google</text><text x="474" y="106" font-size="13" font-weight="800" fill="#180F21" font-family="sans-serif">Drive</text>
+      <rect x="400" y="158" width="150" height="64" rx="16" fill="#FBF7F1"/>
+      <rect x="418" y="174" width="36" height="32" rx="5" fill="#1F7A4D"/><path d="M418 185h36M418 196h36M430 174v32" stroke="#FBF7F1" stroke-width="2"/><text x="466" y="188" font-size="13" font-weight="800" fill="#180F21" font-family="sans-serif">Receipt</text><text x="466" y="204" font-size="13" font-weight="800" fill="#180F21" font-family="sans-serif">log</text>
+      <rect x="400" y="258" width="150" height="64" rx="16" fill="none" stroke="#8A7FA0" stroke-width="2" stroke-dasharray="6 6"/>
+      <text x="475" y="286" text-anchor="middle" font-size="14" font-weight="800" fill="#D3C8D8" font-family="sans-serif">Fortnox</text><text x="475" y="306" text-anchor="middle" font-size="11" font-weight="700" fill="#FF6B35" font-family="sans-serif">NEXT PHASE</text>
+    </svg>
+  </div>
+</section>
 
-  <section id="data">
+<section id="how">
+  <div class="wrap">
+    <div class="eyebrow">How it works</div>
+    <h2>Three steps, about a minute</h2>
+    <div class="grid3">
+      <div class="card"><span class="num">1</span><h3>Connect your inbox</h3><p>Sign in with Google. Email access is read-only, and receipts go to a folder in your own Drive.</p></div>
+      <div class="card"><span class="num">2</span><h3>Add your card statement</h3><p>Drop the export from your card or bank: CSV, Excel or PDF. Mynt works out of the box.</p></div>
+      <div class="card"><span class="num">3</span><h3>Let the agent run</h3><p>It finds, reads and matches the receipts, then shows you the few that need a tap from you.</p></div>
+    </div>
+    <div class="grid4">
+      <div class="card who"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="#180F21" stroke-width="1.8"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2M3 12h18"/></svg></div><h3>Entrepreneurs</h3><p>Spend your evenings on the business, not on paperwork.</p></div>
+      <div class="card who"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="#180F21" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg></div><h3>Consultants</h3><p>Travel and client costs, matched while you are on the road.</p></div>
+      <div class="card who"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="#180F21" stroke-width="1.8"><circle cx="8" cy="9" r="3"/><circle cx="16" cy="9" r="3"/><path d="M2 20c.7-3 3-5 6-5s5.3 2 6 5M14 15c3 0 5.3 2 6 5"/></svg></div><h3>Small teams</h3><p>Every company card, every inbox, one clear overview.</p></div>
+      <div class="card who"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="#180F21" stroke-width="1.8"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h2M12 11h2M8 15h2M12 15h2M16 11v4"/></svg></div><h3>Accountants</h3><p>Complete receipts, with VAT read out, before the month closes.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="dark" id="data">
+  <div class="wrap">
+    <div class="eyebrow">Your data</div>
     <h2>How invoice_audit uses your Google data</h2>
-    <div class="grid">
-      <div class="card"><h3>Gmail, read-only</h3><p>Used only to find receipts and invoices in the date range you choose and read their amount, date, merchant and tax. We never send, change or delete email.</p></div>
+    <div class="grid3">
+      <div class="card"><h3>Gmail, read-only</h3><p>Used only to find receipts and invoices in the period you choose and read their amount, date, merchant and VAT. We never send, change or delete email.</p></div>
       <div class="card"><h3>Google Drive, app files only</h3><p>Used to create a "Receipts" folder and a receipt log sheet. The app can only see files it created itself.</p></div>
-      <div class="card"><h3>Nothing kept by us</h3><p>No database. Your receipts live in your Drive. Disconnect at any time and access is revoked.</p></div>
+      <div class="card"><h3>Nothing kept by us</h3><p>No database. Your receipts live in your own Drive. Disconnect at any time and access is revoked.</p></div>
     </div>
     <p class="note">invoice_audit's use and transfer of information received from Google APIs adheres to the
       <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>,
       including the Limited Use requirements. Read the full <a href="/privacy.html">privacy policy</a>.</p>
-  </section>
+  </div>
+</section>
 
+<div class="cta">
+  <div class="wrap">
+    <h2>Get your evenings back</h2>
+    <p class="lead" style="margin:0 auto">Try it with your own inbox, or with sample data in one click.</p>
+    <div class="actions"><a class="btn btn-dark open-app" href="https://receipt-audit.onrender.com">Open the app</a></div>
+  </div>
+</div>
+
+<div class="wrap">
   <footer>
     <span>invoice_audit &middot; contact: <a href="mailto:crazycoder110@gmail.com" style="margin:0">crazycoder110@gmail.com</a></span>
     <span><a href="/privacy.html">Privacy policy</a><a href="/terms.html">Terms of service</a></span>
   </footer>
 </div>
+
+<div class="opening" id="opening">
+  <svg viewBox="0 0 120 150" aria-hidden="true">
+    <path d="M14 8h92v130l-11.5-8-11.5 8-11.5-8-11.5 8-11.5-8-11.5 8-11.5-8-11.5 8z" fill="#FBF7F1"/>
+    <rect class="ln" x="28" y="30" width="64" height="7" rx="3.5"/><rect class="ln l2" x="28" y="48" width="44" height="7" rx="3.5"/>
+    <rect class="ln l3" x="28" y="66" width="56" height="7" rx="3.5"/><rect class="ln l4" x="28" y="92" width="64" height="9" rx="4.5"/>
+    <rect class="scan" x="8" y="20" width="104" height="5" rx="2.5"/>
+  </svg>
+  <b>Opening invoice_audit</b>
+  <span id="opening-msg">Starting the agent</span>
+  <div class="bar"><i></i></div>
+</div>
+
+<script>
+  // The app runs on a free server that sleeps when idle. Wake it as soon as this page opens,
+  // and when someone clicks "Open the app", show a loader until it answers instead of a blank page.
+  const APP = "https://receipt-audit.onrender.com";
+  const wake = () => fetch(APP + "/api/health", { mode: "no-cors", cache: "no-store" });
+  let warm = wake().then(() => true, () => false);
+  document.querySelectorAll(".open-app").forEach((a) => a.addEventListener("click", async (e) => {
+    e.preventDefault();
+    const box = document.getElementById("opening"), msg = document.getElementById("opening-msg");
+    const lines = ["Starting the agent", "Waking up the server", "Connecting securely", "Almost there"];
+    let i = 0; box.classList.add("on");
+    const t = setInterval(() => { msg.textContent = lines[++i % lines.length]; }, 1800);
+    await Promise.race([warm, new Promise((r) => setTimeout(r, 90000))]);
+    if (!(await warm)) await wake().catch(() => {});
+    clearInterval(t);
+    location.href = APP;
+  }));
+</script>
 </body>
 </html>

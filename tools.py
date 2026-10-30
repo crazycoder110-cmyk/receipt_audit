@@ -6,6 +6,7 @@ modify or delete mail. Drive access is drive.file: the agent only sees files it 
 from __future__ import annotations
 
 import base64
+import contextvars
 import datetime as dt
 import html
 import io
@@ -52,6 +53,44 @@ class AgentContext:
     fortnox: Any = None      # fortnox.Fortnox when the owner connected Fortnox
 
 
+# ---------------------------------------------------------------- progress for the UI
+
+_progress: contextvars.ContextVar = contextvars.ContextVar("progress", default=None)
+
+
+def on_progress(callback) -> contextvars.Token:
+    """Route emit() calls of this run (and the graph's worker threads, which copy the context) to `callback`."""
+    return _progress.set(callback)
+
+
+def emit(stage: str, text: str, level: str = "info") -> None:
+    """One line in the activity log. stage: search|triage|read|match|hunt|save|ai|done, level: info|ok|warn|error."""
+    callback = _progress.get()
+    if callback:
+        callback(stage, text, level)
+
+
+def friendly_error(e: Exception) -> str:
+    """Errors in words the owner understands; AI provider problems are named as such."""
+    import groq
+    from googleapiclient.errors import HttpError
+
+    text = str(e)
+    if isinstance(e, groq.RateLimitError):
+        if any(k in text.lower() for k in ("per day", "tpd", "rpd")):
+            return "Groq issue: the daily AI limit of the free plan is used up. Try again tomorrow or use a paid key."
+        return "Groq issue: the AI rate limit was reached. Wait a minute and run again."
+    if isinstance(e, groq.AuthenticationError):
+        return "Groq issue: the AI key was rejected. Check GROQ_API_KEY."
+    if isinstance(e, groq.APIConnectionError):
+        return "Groq issue: the AI service could not be reached. Try again in a moment."
+    if isinstance(e, groq.APIStatusError):
+        return f"Groq issue: the AI service returned an error ({e.status_code})."
+    if isinstance(e, HttpError):
+        return f"Google issue: {e.reason or text}"
+    return text
+
+
 # ---------------------------------------------------------------- Groq free-tier budget
 
 class RateBudget:
@@ -73,7 +112,10 @@ class RateBudget:
                     self.calls.append((now, tokens))
                     self.used += tokens
                     return
-                time.sleep(max(0.5, 60 - (now - self.calls[0][0])))
+                wait = max(0.5, 60 - (now - self.calls[0][0]))
+                if wait >= 3:
+                    emit("ai", f"Waiting {wait:.0f}s for AI capacity (Groq free-tier limit)", "warn")
+                time.sleep(wait)
 
 
 _budgets: dict[str, RateBudget] = {}
@@ -330,6 +372,7 @@ def extract_document(ctx: AgentContext, msg_id: str) -> dict | None:
 def gmail_search(query: str, runtime: ToolRuntime) -> str:
     """Search Gmail (read-only) with Gmail syntax, e.g. 'from:uber.com after:2026/10/01 before:2026/10/20'.
     Returns up to 6 lines: id|date|sender|subject."""
+    emit("hunt", f"Searching the inbox: {query}")
     try:
         found = search_messages(runtime.context.creds, query, limit=6)
     except Exception as e:
@@ -341,6 +384,7 @@ def gmail_search(query: str, runtime: ToolRuntime) -> str:
 def read_email(message_id: str, runtime: ToolRuntime) -> str:
     """Open one email: sender, subject, date, the key lines of the body and attachment names."""
     e = fetch_email(runtime.context.creds, message_id)
+    emit("hunt", f"Opening email: {e['subject'][:80]}")
     files = ", ".join(a["filename"] for a in e["attachments"]) or "none"
     return f"From: {_sender(e['from'])}\nSubject: {e['subject']}\nDate: {e['date']}\nAttachments: {files}\n" \
            f"{compact(e['body'], 1000)}"
@@ -353,6 +397,7 @@ def read_attachment(message_id: str, filename: str, runtime: ToolRuntime) -> str
     att = next((a for a in email["attachments"] if a["filename"] == filename), None)
     if not att:
         return f"No attachment {filename}. Available: {[a['filename'] for a in email['attachments']]}"
+    emit("hunt", f"Reading attachment: {filename}")
     return compact(attachment_text(runtime.context, message_id, att), 1200) or "No readable text."
 
 
@@ -388,8 +433,9 @@ def submit_match(tx_id: str, receipt_id: str, confidence: float, reason: str, ru
         receipts[receipt_id] = rc
     match = {"receipt_id": receipt_id, "confidence": round(float(confidence), 2), "reason": reason,
              "status": "matched" if confidence >= 0.8 else "check", "by": "hunter agent"}
-    return reply("Saved.", receipts={receipt_id: receipts[receipt_id]}, matches={tx_id: match},
-                 log=[f"Hunter matched {tx_id} → {receipts[receipt_id]['merchant']}: {reason}"])
+    card = next(t["merchant"] for t in state["transactions"] if t["tx_id"] == tx_id)
+    emit("hunt", f"Found missing receipt: {receipts[receipt_id]['merchant']} for {card}", "ok")
+    return reply("Saved.", receipts={receipt_id: receipts[receipt_id]}, matches={tx_id: match})
 
 
 HUNTER_TOOLS = [gmail_search, read_email, read_attachment, extract_receipt, submit_match]
