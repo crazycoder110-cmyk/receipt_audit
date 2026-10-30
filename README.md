@@ -1,107 +1,134 @@
 # 🧾 invoice_audit — AI receipt matching agent
 
-An agent that reads a Gmail inbox, finds receipts, matches them against a card statement (Mynt export),
-files them in Google Drive and keeps a Google Sheet log. The owner only handles the few misses.
+A LangGraph agent that reads a Gmail inbox (read-only), finds receipts and invoices in **any language and any
+country**, matches them to a card statement (Mynt, Pleo, any bank export), files them in Google Drive and keeps a
+Google Sheet log. The owner only handles the few misses, in one tap each.
 
-```
-Gmail (read-only) ─► pre-filter (price in mail?) ─► LLM extracts merchant/date/amount/VAT
-                                                          │
-Mynt / Pleo / bank export (CSV, Excel) ─────────────► match engine (amount › date › name)
-                                                          │
-                       ┌──────────── matched ────────────┼──────── check / missing ───────┐
-                       ▼                                                                  ▼
-     Drive: Kvitton - invoice_audit/2026/2026-10/               Home screen: one tap per miss
-            2026-10-02 SJ 349.00 SEK.pdf                       (confirm · photo · no receipt)
-     Sheet: invoice_audit - Receipt log
+## The agent
+
+```mermaid
+flowchart TD
+    S([START]) --> P[plan_queries<br/><i>LLM: which Gmail searches?</i>]
+    P --> SI[search_inbox<br/><i>Gmail read-only, metadata only</i>]
+    SI --> T[triage<br/><i>LLM: which mails are receipts?</i>]
+    T -. "Send × N (parallel)" .-> X[extract_one<br/><i>body + PDF + OCR → LLM structured output</i>]
+    T -. none .-> R
+    X --> R[reconcile<br/><i>score clear cases · LLM decides unclear ones</i>]
+    R -. "receipts still missing" .-> H[hunter<br/><i>ReAct agent</i>]
+    H -. tool calls .-> TL[tools<br/>gmail_search · read_email · read_attachment<br/>extract_receipt · submit_match]
+    TL --> H
+    H -. done .-> F
+    R -. all found .-> F[file_receipts<br/><i>Drive + Sheet</i>]
+    F --> E([END])
 ```
 
-## Try it in 30 seconds
+| Node | What it does | Model |
+|---|---|---|
+| `plan_queries` | Turns noisy card descriptors (`UBER *TRIP`, `BOLT.EU/O/2610`) into Gmail queries per brand/sender domain | gpt-oss-20b |
+| `search_inbox` | One structural scan of the date window (operators only) + the planned searches. Metadata only | – |
+| `triage` | Picks likely receipts/invoices from `n\|sender\|subject` lines, in any language | gpt-oss-20b |
+| `extract_one` | Fan-out with `Send`: reads body, PDF text (pypdfium2) or scans/photos (vision OCR) → strict JSON schema: merchant, date, total, currency, tax (VAT/moms/GST…), seller tax id, doc no | gpt-oss-20b, qwen3.8 vision |
+| `reconcile` | Cheap score (amount › date › name, also original FX amount) auto-matches clear cases; the LLM judges ambiguous ones like an accountant (tips, FX, early bookings) and must give a reason | gpt-oss-120b |
+| `hunter` ⇄ `tools` | ReAct agent with tools, only for what is still missing: thinks where the receipt could be, searches, opens mails/attachments, extracts, `submit_match` updates graph state via `Command` | gpt-oss-120b |
+| `file_receipts` | `Receipts/<year>/<year-month>/<date> <merchant> <amount>.pdf` in Drive + Sheet log | – |
+
+State is a typed `StateGraph` (`AuditState`) with reducers (`merge` dicts for receipts/matches, `add_messages` for
+the hunter, `operator.add` for the progress log). Google credentials and models are passed as runtime `context`,
+never stored in state.
+
+**No hardcoded keywords, column names, currencies or countries.** Prompts ([prompts.py](prompts.py)) tell the
+model to handle any language, currency and tax system; tested on Swedish kvitto, Indian GST tax invoice, Hindi
+receipt, German Rechnung, English receipts, a Mynt export and an HDFC (India) statement with a `Cr/Dr` column.
+
+## Built for the Groq free tier
+
+Free tier per model: **30 req/min, 8K tokens/min, 200K tokens/day**. The agent is designed around it:
+
+- **Short prompts** (~60–100 tokens each) and strict JSON schemas instead of long instructions.
+- **Compact inputs**: emails are cut to the opening lines + every line containing a digit (amounts, dates, tax, ids
+  — true in every language), URLs removed, max ~1.8K chars. Triage sends `n|sender|subject` and gets numbers back.
+- **Two models**: limits are per model, so bulk reading runs on `gpt-oss-20b` and reasoning on `gpt-oss-120b`.
+- **Client-side limiter** (`RateBudget`): waits before a call instead of getting 429s. `reasoning_effort="low"`
+  keeps hidden reasoning tokens small. Each run logs its token use.
+- **Bounded hunter**: max 5 transactions, 6 steps, compact tool outputs.
+
+Measured: a month with 11 transactions and 11 emails → **≈18K tokens, ~75 s** (≈9% of one model's daily budget).
+
+## Try it
 
 Open the app → **Try with sample data** → **Use sample Mynt export** → **Run agent now**.
-You land on the home screen: *"8 of 11 transactions have a receipt"* plus the misses to fix.
+With a real inbox: **Sign in with Google** → drop your statement → **Run agent now**.
 
-With a real inbox: **Sign in with Google** → drop your Mynt export → **Run agent now**.
+Nightly mode (same graph, no UI), e.g. cron `0 3 * * *`:
+
+```bash
+python agent.py path/to/statement.csv 1     # 1 = look back one day
+```
 
 ## Files
 
 | File | What it does |
 |---|---|
-| `agent.py` | The agent: Gmail scan, LLM extraction (Groq `openai/gpt-oss-120b`), matching, Drive filing, Sheet log. Also a CLI for the nightly run. |
-| `app.py` | Streamlit UI: 3-step onboarding, home screen, one-tap fixes, Swedish/English. |
-| `sample_mynt_export.csv` | Sample statement in Mynt-style Swedish format (`;`, `1 450,00`, original currency). |
+| [agent.py](agent.py) | LangGraph `StateGraph`: state, nodes, routing, reconcile logic, statement reader, `run()`, CLI |
+| [tools.py](tools.py) | Agent tools (`@tool` + `ToolRuntime`), Gmail read-only, PDF/vision reading, Drive + Sheet, rate limiter |
+| [prompts.py](prompts.py) | All LLM instructions (short, language-agnostic) |
+| [app.py](app.py) | Streamlit UI: 3-step onboarding, home screen, one-tap fixes, Swedish/English, live agent log |
+| [sample_mynt_export.csv](sample_mynt_export.csv) | Sample statement in Mynt style (`;`, `1 450,00`, original currency) |
 
 ## Run locally
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env        # fill in the keys (see setup below)
+cp .env.example .env        # fill in the keys
 streamlit run app.py
-```
-
-Nightly mode (same job, no UI) — e.g. cron `0 3 * * *`:
-
-```bash
-python agent.py path/to/mynt_export.csv 1     # 1 = look back one day
 ```
 
 ## Setup (one time)
 
-1. **Groq** – create an API key at console.groq.com → `GROQ_API_KEY`.
+1. **Groq** – API key at console.groq.com → `GROQ_API_KEY`.
 2. **Google Cloud** (console.cloud.google.com), new project:
    - Enable **Gmail API**, **Google Drive API**, **Google Sheets API**.
-   - *OAuth consent screen*: External, app name `invoice_audit`, add scopes `gmail.readonly` and `drive.file`,
+   - *OAuth consent screen*: External, app name `invoice_audit`, scopes `gmail.readonly` + `drive.file`,
      add every tester's Gmail under **Test users**.
-   - *Credentials → OAuth client ID → Web application*. Authorised redirect URIs:
-     `http://localhost:8501` and your deployed URL (e.g. `https://<app>.streamlit.app`).
-   - Copy client ID/secret → `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and set `REDIRECT_URI`.
-3. **Deploy** on Streamlit Community Cloud (share.streamlit.io): point at this repo, `app.py`,
-   paste the same keys into *Secrets* (TOML format). Streamlit apps need a long-running server,
-   so Vercel (serverless) is not a fit for this UI.
+   - *Credentials → OAuth client ID → Web application*, redirect URIs `http://localhost:8501` and the deployed URL.
+   - Put client ID/secret in `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and set `REDIRECT_URI`.
+3. **Deploy** on Streamlit Community Cloud (share.streamlit.io) with the same keys under *Secrets*.
+   (Vercel is serverless and can't host a long-running Streamlit app.)
 
 ## Design decisions
 
-- **Onboarding in 3 taps**: Google sign-in (one consent screen covers Gmail + Drive) → drop the statement → run.
-  No card-provider picker: the column detector reads Mynt, Pleo and bank exports, and falls back to the LLM to
-  map unknown formats.
-- **Least privilege**: `gmail.readonly` (cannot send/change/delete) and `drive.file` (only sees files the app
-  created, not the user's whole Drive).
-- **Store as little email as possible**: only extracted fields (merchant, date, amount, VAT, category) and the
-  message id are kept. The email body/PDF lives in memory just long enough to be filed in the owner's own Drive.
-- **Cheap and fast**: a regex pre-filter drops mails without any price before the LLM is called.
-- **Honest matching**: score = 50% amount (also checks original currency, e.g. USD subscriptions) + 25% date
-  (±7 days, bookings are often paid before travel) + 25% merchant-name similarity. ≥0.75 = matched,
-  0.5–0.75 = *"Is this it?"* suggestion, otherwise missing. One receipt can only match one transaction.
-- **Drive structure** an accountant understands: `Kvitton/<year>/<year-month>/<date> <merchant> <amount>.pdf`.
-  Email receipts without a PDF attachment are archived as a PDF of the email text. Re-runs are idempotent.
-- **Missing receipts**: one tap — confirm the suggestion, snap a photo (opens the camera on mobile, filed to the
-  same Drive folder), or mark "no receipt". The Sheet is updated immediately.
+- **Onboarding in 3 taps**: Google sign-in (one consent covers Gmail + Drive) → drop any statement → run.
+  No provider picker: the LLM reads any export layout (CSV, Excel, PDF).
+- **Least privilege**: `gmail.readonly` (cannot send/change/delete) and `drive.file` (only files the app created).
+- **Store as little email as possible**: state holds extracted fields + message ids only. The original document is
+  re-fetched from Gmail at filing time and goes straight into the owner's own Drive.
+- **Honest matching**: every match has a confidence, a reason and who decided (`rules`, `LLM`, `hunter agent`,
+  `owner`). Unsure → "Is this it?" suggestion, never a silent guess. One receipt per transaction.
+- **Exceptions in one tap**: confirm the suggestion, snap a photo (camera on mobile, filed in Drive), or mark
+  "no receipt". The Sheet updates immediately.
 - **GDPR**: "Disconnect & delete my data" revokes the Google token; nothing is stored server-side.
 
 ## Biggest risks
 
-1. **Gmail access** – `gmail.readonly` is a *restricted* scope. Until the app passes Google verification plus an
-   annual third-party security assessment (CASA), it is limited to 100 manually added test users and shows an
-   "unverified app" warning. Start verification in week 1; it takes weeks. Microsoft (`Mail.Read`) needs publisher
-   verification and, in many company tenants, admin consent.
-2. **LLM data location** – Groq is fine for a demo, but GDPR requires EU processing in production
-   (e.g. Claude on AWS Bedrock Frankfurt, Azure OpenAI EU, or Mistral).
-3. **Fortnox** – each customer needs an integration licence and the app must be approved by Fortnox for
-   multi-customer use. Mynt/Fortnox Företagskort already match receipts for their own card, so our edge must be
-   *all cards + all inboxes + one simple screen*.
-4. **Matching edge cases** – tips (Bolt/Uber), FX differences, split payments, one receipt covering several
-   transactions. Handled today by the "check" state; to be measured on real Mynt exports.
+1. **Gmail access** – `gmail.readonly` is a *restricted* scope: production needs Google verification plus an annual
+   CASA security assessment; until then max 100 test users and an "unverified app" screen. Start in week 1.
+   Microsoft (`Mail.Read`) needs publisher verification and often tenant admin consent.
+2. **LLM data location** – Groq is US-hosted; production under GDPR needs EU processing (e.g. Claude on AWS
+   Bedrock Frankfurt, Azure OpenAI EU, Mistral). The graph only depends on a LangChain chat model, so it's a swap.
+3. **Fortnox** – each customer needs an integration licence and the app needs Fortnox approval. Mynt/Fortnox
+   Företagskort already match receipts for their own card: our edge must be *all cards + all inboxes + one screen*.
+4. **Free-tier throughput** – 8K tokens/min ≈ 7 receipts/min per model. Fine nightly; a paid tier for scale.
 
 ## What I'd build next
 
-1. Fortnox: upload receipts to the Fortnox Inbox (`/archive`) and attach them to vouchers (`/voucherfileconnections`).
-2. Real nightly scheduler + database (Postgres in the EU) so decisions persist between runs, multi-tenant.
-3. Microsoft 365 / Outlook and extra inboxes (one click each).
-4. Pleo API + bank card feeds (open banking), so no statement upload is needed.
-5. Learn from the owner's confirmations (merchant aliases like `BOLT.EU/O` → Bolt) to raise auto-match rate.
+1. Fortnox: upload to the Fortnox Inbox (`/archive`) and attach to vouchers (`/voucherfileconnections`).
+2. Postgres (EU) + LangGraph checkpointer: persist runs, owner decisions, multi-tenant, resumable nightly jobs.
+3. Outlook / Microsoft 365 and extra inboxes (one click each); Pleo API and open-banking card feeds.
+4. Learn merchant aliases from owner confirmations (`BOLT.EU/O` → Bolt) to raise the auto-match rate.
 
 ## Estimated running cost per user
 
-~300 candidate emails/month × ~1.5k tokens ≈ 0.5M tokens on Groq `openai/gpt-oss-120b`
-($0.15 in / $0.60 out per 1M) → **≈ $0.10–0.20/user/month** for the LLM,
-Google APIs are free at this volume, hosting a few cents per user at scale.
+~300 candidate emails/month → ~60 read in full × ~1K tokens + triage/reconcile ≈ 0.1–0.2M tokens/month
+→ **≈ $0.02–0.05/user/month** on Groq paid pricing (gpt-oss-20b $0.075/$0.30, gpt-oss-120b $0.15/$0.60 per 1M).
+Google APIs are free at this volume.
