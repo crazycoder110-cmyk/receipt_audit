@@ -26,7 +26,7 @@ With a real inbox: **Sign in with Google** → drop your Mynt export → **Run a
 
 | File | What it does |
 |---|---|
-| `agent.py` | The agent: Gmail scan, LLM extraction (Groq), matching, Drive filing, Sheet log. Also a CLI for the nightly run. |
+| `agent.py` | The agent: Gmail scan, LLM extraction (Groq `openai/gpt-oss-120b`), matching, Drive filing, Sheet log. Also a CLI for the nightly run. |
 | `app.py` | Streamlit UI: 3-step onboarding, home screen, one-tap fixes, Swedish/English. |
 | `sample_mynt_export.csv` | Sample statement in Mynt-style Swedish format (`;`, `1 450,00`, original currency). |
 
@@ -102,5 +102,6 @@ python agent.py path/to/mynt_export.csv 1     # 1 = look back one day
 
 ## Estimated running cost per user
 
-~300 candidate emails/month × ~1.5k tokens ≈ 0.5M tokens → **≈ $0.3–0.5/user/month** for the LLM,
+~300 candidate emails/month × ~1.5k tokens ≈ 0.5M tokens on Groq `openai/gpt-oss-120b`
+($0.15 in / $0.60 out per 1M) → **≈ $0.10–0.20/user/month** for the LLM,
 Google APIs are free at this volume, hosting a few cents per user at scale.

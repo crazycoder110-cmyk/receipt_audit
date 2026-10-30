@@ -30,7 +30,7 @@ SCOPES = [
     "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/drive.file",
 ]
-GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
 ROOT_FOLDER = "Kvitton - invoice_audit"
 SHEET_TITLE = "invoice_audit - Receipt log"
 MAX_EMAILS = 150
@@ -138,9 +138,12 @@ def load_statement(file, filename: str, groq_key: str | None = None) -> pd.DataF
 
 def _llm_json(groq_key: str, system: str, user: str) -> dict:
     client = Groq(api_key=groq_key, max_retries=6)  # free tier rate limits -> back off and retry
+    # gpt-oss is a reasoning model; extraction is simple, so keep reasoning short (faster, cheaper).
+    extra = {"reasoning_effort": "low"} if GROQ_MODEL.startswith("openai/gpt-oss") else {}
     resp = client.chat.completions.create(
         model=GROQ_MODEL,
         temperature=0,
+        **extra,
         response_format={"type": "json_object"},
         messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
     )
