@@ -2,8 +2,12 @@
 
 A LangGraph agent that reads a Gmail inbox (read-only), finds receipts and invoices in **any language and any
 country**, matches them to a card statement (Mynt, Pleo, any bank export), files them in Google Drive and keeps a
-Google Sheet log, and sends matched receipts to the Fortnox inbox. The owner only handles the few misses, in one
-tap each.
+Google Sheet log. The owner only handles the few misses, in one tap each. Upload to the Fortnox inbox is built and
+is the next step to switch on (it needs a Fortnox developer sandbox).
+
+- **App:** https://receipt-audit.onrender.com (sign in with Google, or try it with sample data)
+- **Website, comparison and privacy policy:** https://receipt-audit-site.onrender.com
+  (free hosting sleeps when idle: the first visit can take up to a minute)
 
 ## The agent
 
@@ -116,6 +120,25 @@ uvicorn server:app --port 8501   # open http://localhost:8501
    Add the app URL as a redirect URI in Google Cloud. The agent runs in a background thread for a minute or two,
    so it needs a long-running server; serverless hosts like Vercel are not a fit.
 
+## Existing products: what we found and where we are better
+
+Compared on public websites and help pages (30 Oct 2026); full table with logos at
+https://receipt-audit-site.onrender.com/#compare. These products were not tested hands-on with paid accounts.
+
+| | Any card | Finds receipts in the inbox itself | Uncertain matches | Receipts stored |
+|---|---|---|---|---|
+| **invoice_audit** | Any statement export (Mynt, Pleo, Amex, banks) | Yes, Gmail read-only | Confidence + reason, owner confirms | Owner's own Drive + Sheet |
+| Mynt | Mynt card only | Says it fetches from email | Not documented | In Mynt |
+| Fortnox Företagskort / Kvitto & Utlägg | Fortnox card (others 4.90 kr/receipt) | No, photo in the app | Not documented | In Fortnox |
+| Pleo (Fetch) | Pleo card only | Yes, Gmail/Outlook, one work email | Unsure ones wait in an inbox | In Pleo |
+| Midday (open source, joining Ramp) | Via bank connections | Yes, Gmail | Confidence, owner confirms | In Midday |
+| Bokio / Spiris | Bank rows in their own bookkeeping | No, forward emails to a receipt inbox | Bokio suggests on amount + date | In Bokio / Spiris |
+
+**Where we are clearly better:** one agent across every card and every inbox (the card companies each solve it only
+for their own card), receipts kept in the owner's own Drive, an honest reason on every match plus a second AI search
+for what is missing, and receipts in any language and currency (tested: Swedish, English, German, Hindi; USD to SEK).
+**Where we are not yet:** Fortnox upload is not switched on, Microsoft 365 and several inboxes per user come next.
+
 ## Design decisions
 
 - **Onboarding in 3 taps**: Google sign-in (one consent covers Gmail + Drive) → drop any statement → run.
@@ -125,9 +148,12 @@ uvicorn server:app --port 8501   # open http://localhost:8501
   re-fetched from Gmail at filing time and goes straight into the owner's own Drive.
 - **Honest matching**: every match has a confidence, a reason and who decided (`rules`, `LLM`, `hunter agent`,
   `owner`). Unsure → "Is this it?" suggestion, never a silent guess. One receipt per transaction.
-- **Exceptions in one tap**: confirm the suggestion, snap a photo (camera on mobile, filed in Drive), or mark
-  "no receipt". The Sheet updates immediately.
-- **GDPR**: "Disconnect & delete my data" revokes the Google token; nothing is stored server-side.
+- **Exceptions in one tap**: confirm the suggestion, upload a photo or PDF (camera on mobile, filed in Drive), or
+  mark "no receipt". The Sheet updates immediately.
+- **Plain progress**: the activity log says what happens ("Found 11 emails in the period", "Read receipt: Vy …"),
+  and AI provider problems are named ("Groq issue: the AI rate limit was reached").
+- **GDPR**: "Disconnect and delete my data" revokes the Google token; sessions live in server memory only and expire
+  after 6 hours. Receipts are in the owner's Drive.
 
 ## Biggest risks
 
@@ -139,11 +165,14 @@ uvicorn server:app --port 8501   # open http://localhost:8501
 3. **Fortnox** – each customer needs an integration licence and the app needs Fortnox approval. Mynt/Fortnox
    Företagskort already match receipts for their own card: our edge must be *all cards + all inboxes + one screen*.
 4. **Free-tier throughput** – 8K tokens/min ≈ 7 receipts/min per model. Fine nightly; a paid tier for scale.
+5. **Hosting** – the demo runs on Render's free plan (US region, sleeps when idle). Production needs EU hosting and
+   a database for runs and owner decisions.
 
 ## What I'd build next
 
-1. Fortnox bookkeeping: suggest the BAS account and VAT row, create the voucher after owner approval and attach
-   the receipt (`/vouchers` + `/voucherfileconnections`). Today receipts land in the voucher inbox.
+1. Fortnox: connect a developer sandbox and switch on the upload to the voucher inbox (already built in
+   `fortnox.py` and the `send_to_fortnox` node). Then suggest the BAS account and VAT row, create the voucher after
+   owner approval and attach the receipt (`/vouchers` + `/voucherfileconnections`).
 2. Postgres (EU) + LangGraph checkpointer: persist runs, owner decisions, multi-tenant, resumable nightly jobs.
 3. Outlook / Microsoft 365 and extra inboxes (one click each); Pleo API and open-banking card feeds.
 4. Learn merchant aliases from owner confirmations (`BOLT.EU/O` → Bolt) to raise the auto-match rate.
