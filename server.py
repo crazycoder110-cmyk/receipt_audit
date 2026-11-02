@@ -113,6 +113,15 @@ def receipt_view(rc: dict | None) -> dict | None:
                                    "drive_link", "gmail_link", "fortnox_id")}
 
 
+def statement_view(s: Session) -> dict | None:
+    purchases = [t for t in s.statement or [] if agent.is_purchase(t)]
+    if not purchases:
+        return None
+    return {"name": s.statement_name, "count": len(purchases), "first": fmt_date(purchases[0]["date"]),
+            "last": fmt_date(purchases[-1]["date"]), **s.statement_pages,
+            "preview": [{k: t.get(k) for k in ("date", "merchant", "amount", "currency")} for t in purchases[:5]]}
+
+
 def state_view(s: Session) -> dict:
     res = s.result
     rows = res["rows"] if res else []
@@ -121,10 +130,7 @@ def state_view(s: Session) -> dict:
         "google": {"configured": bool(os.getenv("GOOGLE_CLIENT_ID")), "connected": bool(s.creds), "email": s.email},
         "demo": s.demo,
         "fortnox": {"configured": fortnox.configured(), "connected": bool(s.fortnox)},
-        "statement": {"name": s.statement_name, "count": len(s.statement), "first": fmt_date(s.statement[0]["date"]),
-                      "last": fmt_date(s.statement[-1]["date"]), **s.statement_pages,
-                      "preview": [{k: t.get(k) for k in ("date", "merchant", "amount", "currency")}
-                                  for t in s.statement[:5]]} if s.statement else None,
+        "statement": statement_view(s),
         "running": s.running, "error": s.error, "events": len(s.events),
         "result": {
             "rows": [{**{k: r.get(k) for k in ("tx_id", "date", "merchant", "amount", "currency", "status",
@@ -241,7 +247,7 @@ def statement(request: Request, file: UploadFile | None = File(None), sample: st
         return respond(sid, {"error": str(e), "code": "too_many_pages", "pages": e.pages}, 400)
     except Exception as e:
         return respond(sid, {"error": f"Could not read this file. {tools.friendly_error(e)}"}, 400)
-    if not s.statement:
+    if not statement_view(s):
         return respond(sid, {"error": "No card purchases found in this file."}, 400)
     s.result, s.events, s.error = None, [], ""
     return respond(sid, state_view(s))

@@ -39,7 +39,10 @@ SCOPES = [
 ]
 ROOT_FOLDER = "Receipts - invoice_audit"
 SHEET_TITLE = "invoice_audit - Receipt log"
-DOC_CHARS = 1800          # per email/attachment sent to the LLM (~500 tokens)
+DOC_CHARS = 1800
+# every Gmail search: mail you only sent (e.g. your own invoices) is skipped; anything in the inbox counts,
+# also mail sent to yourself
+MAILBOX = "{in:inbox -in:sent} -in:drafts -in:chats"          # per email/attachment sent to the LLM (~500 tokens)
 
 
 @dataclass
@@ -445,7 +448,7 @@ def gmail_search(query: str, runtime: ToolRuntime) -> str:
     Returns up to 6 lines: id|date|sender|subject."""
     emit("hunt", f"Searching the inbox: {query}")
     try:
-        found = search_messages(runtime.context.creds, query, limit=6)
+        found = search_messages(runtime.context.creds, query if "in:" in query else f"{query} {MAILBOX}", limit=6)
     except Exception as e:
         return f"Search failed: {e}"
     return "\n".join(f"{m['id']}|{m['date']}|{m['from']}|{m['subject']}" for m in found) or "No results."

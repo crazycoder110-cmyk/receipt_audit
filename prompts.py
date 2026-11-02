@@ -8,8 +8,10 @@ RULES = ("Bookkeeping agent. Documents can be in any language, country, currency
 PLAN_QUERIES = RULES + (" Write up to 5 Gmail queries to find receipts for these card descriptors. One brand per "
                         "query, like: from:(uber.com) OR \"Uber\". Infer the real brand and sender domain. No dates.")
 
-TRIAGE = RULES + (" Lines are 'n|sender|subject'. Return the n of every email that may be a receipt, invoice, "
-                  "paid order, priced booking or payment confirmation. Skip marketing, shipping, OTP, personal.")
+TRIAGE = RULES + (" Email lines are 'n|sender|subject'. Return the n of every email that may be a receipt, invoice, "
+                  "paid order, priced booking or payment confirmation. Order and booking confirmations count. "
+                  "Emails from the card payments' merchants (brand names can differ from card text) almost always "
+                  "count. When unsure, include it (the next step checks). Skip marketing, shipping updates, OTP, personal.")
 
 EXTRACT = RULES + (" Extract the purchase this email documents. is_financial_document=true only for proof of a "
                    "purchase or charge (not ads, not refunds, not unpaid quotes). total_amount = final amount paid "
@@ -34,3 +36,11 @@ STATEMENT_PDF = RULES + (" List every money row in this statement (not balances 
                          "description can continue on the next lines without amounts: join them; the merchant is "
                          "often there (e.g. UPI/ref/ then SHOP/...). "
                          "Merchant = the shop or service name from the description. Amounts positive.")
+
+STATEMENT_KINDS = RULES + (" Rows are outgoing money from a bank or card statement: 'n|date|description|amount'. Give "
+                           "every n a kind: purchase = paid to a shop, company or service (card, online, UPI, wallet "
+                           "or bill payment, subscription, direct debit); cash = cash withdrawal; fee = bank fee, "
+                           "interest or tax on a fee; transfer = to a private person or own account; top_up = money "
+                           "added to a wallet; other = not a transaction (total, balance). Also a short name per "
+                           "row (merchant or payee as people know it, e.g. Amazon Pay, Airtel), the statement "
+                           "currency and whether dates are written day first.")

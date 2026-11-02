@@ -123,9 +123,10 @@ class StatementLayout(BaseModel):
 
 class StatementLine(BaseModel):
     kind: Literal["purchase", "top_up", "cash", "transfer", "fee", "incoming"] = Field(
-        description="purchase = paid to a shop or service (card, online, UPI, direct debit)")
+        description="purchase = paid to a shop, company or service: card, online, UPI, wallet or bill payment, "
+                    "direct debit. transfer = to a private person or own account")
     date: str = Field(description="YYYY-MM-DD")
-    description: str
+    description: str = Field(description="Short: the merchant or payee name, max 60 characters, no reference numbers")
     amount: float
     currency: Optional[str]
     original_amount: Optional[float]
@@ -192,20 +193,35 @@ def _read_table(data: bytes, filename: str) -> pd.DataFrame:
     return pd.DataFrame([r + [None] * (width - len(r)) for r in rows], dtype=str)
 
 
-def _incoming_by_balance(lines: list[StatementLine]) -> set[int]:
-    """Arithmetic beats reading columns: where the running balance rose by exactly the row's amount, the money came
-    in. Every money row is listed in order, so the balance before a row is the previous row's balance after."""
-    incoming, previous = set(), None
-    for i, line in enumerate(lines):
-        before = line.balance_before if line.balance_before is not None else previous
+def _balance_kinds(lines: list[StatementLine]) -> list[str]:
+    """Arithmetic beats reading columns: where the running balance rose by exactly the row's amount the money came
+    in, where it fell by that amount it went out (whatever the label said). Every money row is listed in order, so
+    the balance before a row is the previous row's balance after."""
+    kinds, previous = [], None
+    for line in lines:
+        kind, before = line.kind, line.balance_before if line.balance_before is not None else previous
+        if line.balance_after is not None and before is not None:
+            change = line.balance_after - before
+            if abs(change - abs(line.amount)) < 0.02:
+                kind = "incoming"
+            elif abs(change + abs(line.amount)) < 0.02 and kind == "incoming":
+                kind = "transfer"  # money went out: kept in the background, a receipt can prove it was a purchase
         if line.balance_after is not None:
-            if before is not None and abs(line.balance_after - before - abs(line.amount)) < 0.02:
-                incoming.add(i)
             previous = line.balance_after
-    return incoming
+        kinds.append(kind)
+    return kinds
 
 
 # ---------------------------------------------------------------- statement PDFs: only the transaction table
+
+OUTGOING = ("purchase", "transfer", "top_up")
+
+
+def is_purchase(t: dict) -> bool:
+    """Rows the owner needs a receipt for. Other outgoing rows (transfers, top-ups) are kept in the background and
+    only show up when a receipt proves they were a purchase (reading a statement can mislabel a UPI payment)."""
+    return t.get("kind", "purchase") == "purchase"
+
 
 MAX_STATEMENT_PAGES = 5
 # a transaction row has a date and an amount, in any language: 2026-10-04, 04/10/2026, 18 Jun 19, Oct 4, 2026
@@ -246,6 +262,108 @@ def statement_tables(pages: list[str]) -> list[str]:
     return tables
 
 
+# money: 1,234.56 / 1 234,56 / -841.04 / (12.00); not percentages, times or long reference numbers
+_MONEY = re.compile(r"(?<![\w.,/])\(?[-−]?(?:\d{1,3}(?:[ ,.'’]\d{3})+|\d+)[.,]\d{2}\)?(?![\d%])(?!\s?%)")
+_MARKERS = {"dr": "out", "db": "out", "debit": "out", "d": "out", "cr": "in", "credit": "in", "c": "in"}
+
+
+def _money(token: str) -> float:
+    return to_number(token, token.rstrip(")")[-3])
+
+
+def table_rows(pages: list[str]) -> list[dict]:
+    """The transaction rows of statement tables, read by code (no LLM): a row starts where an amount appears, with
+    the date at the start of the line or the previous row's date; lines without amounts continue the description
+    (e.g. UPI/ref/ then the merchant). Direction comes from the running balance, a Dr/Cr marker or the sign."""
+    rows, date = [], None
+    for page in pages:
+        current = None
+        for line in page.splitlines():
+            text, lead = line.strip(), []
+            while (m := _DATE.match(text)):  # a row can start with two dates (purchase, settlement)
+                lead.append(m.group(0))
+                text = text[m.end():].strip()
+            money = list(_MONEY.finditer(text))
+            if money:
+                date = lead[0] if lead else date
+                if date is None:  # header lines above the first row
+                    continue
+                after = text[money[-1].end():].split()
+                current = {"date": date, "lines": 1,
+                           "description": re.sub(r"(\s+\d+)+$", "", text[:money[0].start()].strip()),
+                           "values": [_money(x.group(0)) for x in money],
+                           "marker": _MARKERS.get(after[0].lower().strip(".")) if after else None}
+                rows.append(current)
+            elif current is not None and text and current["lines"] < 4:
+                current["description"] = f"{current['description']} {text}".strip()
+                current["lines"] += 1
+    # running balance: the last value of a row, if it moves by the row's amount on most rows
+    pairs = [(a, b) for a, b in zip(rows, rows[1:]) if len(b["values"]) >= 2]
+    chained = sum(abs(abs(b["values"][-1] - a["values"][-1]) - abs(b["values"][0])) < 0.01 for a, b in pairs)
+    balance_mode = bool(pairs) and chained >= 0.6 * len(pairs)
+    signs = [r["values"][0] < 0 for r in rows]
+    negative_out = sum(signs) >= len(signs) / 2  # card exports: purchases are the usual (negative) rows
+    out, previous = [], None
+    for r in rows:
+        values = r["values"]
+        if balance_mode and len(values) == 1:  # balance brought forward
+            previous = values[0]
+            continue
+        direction = r["marker"]
+        if balance_mode and previous is not None:
+            change = values[-1] - previous
+            if abs(change) < 0.005:  # totals and summaries do not move the balance
+                previous = values[-1]
+                continue
+            if abs(abs(change) - abs(values[0])) < 0.01:
+                direction = "in" if change > 0 else "out"
+        if balance_mode:
+            previous = values[-1]
+        if direction is None:
+            direction = "out" if (values[0] < 0) == negative_out else "in"
+        out.append({"date": r["date"], "description": r["description"][:160], "amount": abs(values[0]),
+                    "direction": direction})
+    return out
+
+
+class RowKind(BaseModel):
+    n: int
+    name: str = Field(description="Short merchant or payee name, max 30 characters, no reference numbers")
+    kind: Literal["purchase", "cash", "fee", "transfer", "top_up", "other"]
+
+
+class StatementKinds(BaseModel):
+    currency: Optional[str] = Field(description="ISO 4217 of the statement")
+    day_first: bool = Field(description="True if dates like 03/10/2026 mean 3 October")
+    rows: list[RowKind]
+
+
+def _classify(ctx: AgentContext, header: str, rows: list[dict]) -> tuple[list[RowKind | None], str | None, bool]:
+    """One small LLM call: the kind and a short name of each outgoing row, the statement currency, the date order."""
+    lines = "\n".join(f"{n}|{r['date']}|{' '.join(r['description'].split())[:70]}|{r['amount']:.2f}"
+                      for n, r in enumerate(rows))
+    try:
+        res = structured(ctx.smart, StatementKinds, prompts.STATEMENT_KINDS,
+                         f"Statement header:\n{header}\n\nRows:\n{lines}", out=300 + 20 * len(rows))
+    except Exception:
+        return [None] * len(rows), None, True
+    kinds = {k.n: k for k in res.rows}
+    return [kinds.get(n) for n in range(len(rows))], res.currency, res.day_first
+
+
+def _read_rows(ctx: AgentContext, pages: list[str]) -> list[StatementLine]:
+    """One LLM call for a few pages; if the answer fails (too long, broken JSON), one call per page instead."""
+    import groq
+    try:
+        return structured(ctx.smart, StatementLines, prompts.STATEMENT_PDF, "\n".join(pages), out=2500).transactions
+    except (groq.RateLimitError, groq.AuthenticationError, groq.APIConnectionError):
+        raise
+    except Exception:
+        if len(pages) == 1:
+            raise
+        return [l for page in pages for l in _read_rows(ctx, [page])]
+
+
 def load_statement(file, filename: str, ctx: AgentContext, password: str | None = None,
                    info: dict | None = None) -> list[dict]:
     """Card statement (CSV / Excel / PDF) -> purchases. The LLM reads the layout, so any export format works.
@@ -266,22 +384,32 @@ def load_statement(file, filename: str, ctx: AgentContext, password: str | None 
             pages = [tools.vision_read(ctx.vision, tools.pdf_images(data, MAX_STATEMENT_PAGES))]
         if not pages:
             raise ValueError("No transactions found in this PDF.")
-        chunks, size = [""], 0
+        table = [r for r in table_rows(pages) if r["direction"] == "out"]
+        if len(table) >= 2:  # read by code; the LLM only labels short rows
+            kinds, currency, day_first = _classify(ctx, "\n".join(pages[0].splitlines()[:20]), table)
+            dates = _parse_dates(pd.Series([r["date"] for r in table]), day_first)
+            rows = [{"date": d.isoformat(), "merchant": (k.name.strip() if k and k.name.strip() else
+                                                         " ".join(r["description"].split())[:80]),
+                     "amount": r["amount"], "currency": (currency or ctx.home_currency).upper(),
+                     "orig_amount": None, "orig_currency": None, "kind": k.kind if k else "purchase"}
+                    for r, k, d in zip(table, kinds, dates) if (k.kind if k else "purchase") in OUTGOING and pd.notna(d)]
+            rows.sort(key=lambda r: r["date"])
+            return [{"tx_id": f"tx{i}", **r} for i, r in enumerate(rows)]
+        chunks, size = [[]], 0
         for page in pages:
             page_size = len(" ".join(page.split()))
             if chunks[-1] and size + page_size > 5000:
-                chunks.append("")
+                chunks.append([])
                 size = 0
-            chunks[-1] += page + "\n"
+            chunks[-1].append(page)
             size += page_size
-        lines = [l for chunk in chunks
-                 for l in structured(ctx.smart, StatementLines, prompts.STATEMENT_PDF, chunk, out=2500).transactions]
-        incoming = _incoming_by_balance(lines)
+        lines = [l for chunk in chunks for l in _read_rows(ctx, chunk)]
+        kinds = _balance_kinds(lines)
         rows = [{"date": l.date, "merchant": l.description, "amount": abs(l.amount),
                  "currency": (l.currency or ctx.home_currency).upper(),
                  "orig_amount": abs(l.original_amount) if l.original_amount else None,
-                 "orig_currency": l.original_currency or None}
-                for i, l in enumerate(lines) if l.kind == "purchase" and i not in incoming]
+                 "orig_currency": l.original_currency or None, "kind": kind}
+                for l, kind in zip(lines, kinds) if kind in OUTGOING]
     else:
         raw = _read_table(data, filename)
         preview = "\n".join(f"{i}: " + "|".join("" if pd.isna(v) else str(v)[:40] for v in row)
@@ -313,7 +441,7 @@ def load_statement(file, filename: str, ctx: AgentContext, password: str | None 
         frame = frame.dropna(subset=["date", "amount"])
         frame = frame[frame["amount"] < 0] if lay.purchases_are_negative else frame[frame["amount"] > 0]
         frame = frame.astype(object).where(frame.notna(), None)
-        rows = [{**r, "date": r["date"].isoformat(), "amount": abs(r["amount"]),
+        rows = [{**r, "kind": "purchase", "date": r["date"].isoformat(), "amount": abs(r["amount"]),
                  "orig_amount": abs(r["orig_amount"]) if r["orig_amount"] else None} for r in frame.to_dict("records")]
     rows.sort(key=lambda r: r["date"])
     return [{"tx_id": f"tx{i}", **r} for i, r in enumerate(rows)]
@@ -381,7 +509,7 @@ def reconcile_receipts(transactions: list[dict], receipts: list[dict], llm=None,
                                    "reason": c[0][1].capitalize() + ".", "by": "rules"}
     log.append(f"{len(matches)} matched automatically (same amount, date and merchant)")
 
-    ambiguous = [t for t in open_tx if t["tx_id"] not in matches
+    ambiguous = [t for t in open_tx if t["tx_id"] not in matches and is_purchase(t)
                  and any(r["rc_id"] not in used for _, _, r in cands[t["tx_id"]])]
     if ambiguous and llm is not None:
         payload = [{"tx_id": t["tx_id"], "date": t["date"], "card_description": t["merchant"], "amount": t["amount"],
@@ -410,6 +538,23 @@ def reconcile_receipts(transactions: list[dict], receipts: list[dict], llm=None,
                 used.add(r["rc_id"])
                 matches[t["tx_id"]] = {"receipt_id": r["rc_id"], "confidence": s, "status": "check",
                                        "reason": why.capitalize() + ".", "by": "rules"}
+    # evidence: a receipt with exactly the amount of an outgoing row the statement reading did not call a purchase
+    # (same currency, at most 3 days apart, only one such row) shows it was one
+    found = 0
+    for r in pool:
+        if r["rc_id"] in used:
+            continue
+        rows = [t for t in open_tx if not is_purchase(t) and t["tx_id"] not in matches
+                and t.get("currency") == r["currency"] and abs(t["amount"] - r["amount"]) <= 0.01
+                and abs((_d(t["date"]) - _d(r["date"])).days) <= 3]
+        if len(rows) == 1:
+            used.add(r["rc_id"])
+            matches[rows[0]["tx_id"]] = {"receipt_id": r["rc_id"], "confidence": 0.9, "status": "matched",
+                                         "reason": "Exact amount and date; a payment the statement listed as "
+                                                   f"{rows[0]['kind'].replace('_', '-')}.", "by": "rules"}
+            found += 1
+    if found:
+        log.append(f"{found} more payment(s) matched by exact amount and date")
     return matches, log
 
 
@@ -425,7 +570,7 @@ def plan_queries(state: AuditState, runtime: Runtime[AgentContext]) -> dict:
     merchants = [m for m, _ in Counter(t["merchant"] for t in state["transactions"]).most_common(40)]
     tools.emit("search", f"Preparing searches for {len(merchants)} card merchants")
     plan = structured(runtime.context.fast, SearchPlan, prompts.PLAN_QUERIES, "\n".join(merchants))
-    queries = [f"({q}) {window}" for q in plan.queries[:5]]
+    queries = [f"({q}) {window} {tools.MAILBOX}" for q in plan.queries[:5]]
     return {"queries": queries}
 
 
@@ -434,8 +579,7 @@ def search_inbox(state: AuditState, runtime: Runtime[AgentContext]) -> dict:
     tools.emit("search", f"Fetching emails from {_d(state['since']):%d %b} to {_d(state['until']):%d %b %Y}")
     # One structural scan of the whole window (operators only, no keywords) + the LLM's targeted searches.
     found = {m["id"]: m for m in tools.search_messages(
-        # mail you only sent (e.g. your own invoices) is skipped; anything in the inbox counts, also sent to yourself
-        creds, f"{_window(state)} {{in:inbox -in:sent}} -in:drafts -in:chats", WINDOW_SCAN_LIMIT)}
+        creds, f"{_window(state)} {tools.MAILBOX}", WINDOW_SCAN_LIMIT)}
     for q in state["queries"]:
         try:
             found.update({m["id"]: m for m in tools.search_messages(creds, q, QUERY_SCAN_LIMIT)})
@@ -448,12 +592,23 @@ def search_inbox(state: AuditState, runtime: Runtime[AgentContext]) -> dict:
 def triage(state: AuditState, runtime: Runtime[AgentContext]) -> dict:
     items = list(state.get("candidates", {}).values())
     tools.emit("triage", f"Identifying receipts and invoices among {len(items)} emails")
+    # the card merchants tell the model what to look for (names only: words with digits are references)
+    names = [" ".join(w for w in re.split(r"[\s/*@]+", t["merchant"]) if w and not any(c.isdigit() for c in w))
+             for t in state["transactions"]]
+    merchants = ", ".join(dict.fromkeys(" ".join(n.split()[:4]) for n in names if n))[:600]
+    # safety net without the model: sender or subject shares a word with a card merchant (Airtel ~ AIRTEL.IN)
+    words = {w for n in names for w in re.findall(r"[^\W\d_]{4,}", n.lower())}
+    def known_merchant(m: dict) -> bool:
+        return any(w[:5] == k[:5] for w in re.findall(r"[^\W\d_]{4,}", f"{m['from']} {m['subject']}".lower())
+                   for k in words if len(w) >= 5 and len(k) >= 5)
     picked: list[str] = []
     for i in range(0, len(items), 60):  # compact 'n|sender|subject' lines, the model answers with numbers
         batch = items[i:i + 60]
         lines = "\n".join(f"{n}|{m['from']}|{m['subject']}" for n, m in enumerate(batch))
-        res = structured(runtime.context.fast, Triage, prompts.TRIAGE, lines, out=300)
+        res = structured(runtime.context.fast, Triage, prompts.TRIAGE,
+                         f"Card payments: {merchants}\n\nEmails:\n{lines}", out=300)
         picked += [batch[n]["id"] for n in res.selected if 0 <= n < len(batch)]
+    picked += [m["id"] for m in items if known_merchant(m)]
     picked = list(dict.fromkeys(picked))[:MAX_EXTRACT]
     tools.emit("triage", f"{len(picked)} emails look like receipts or invoices" if picked
                else "No receipts or invoices found in the inbox", "ok" if picked else "warn")
@@ -478,20 +633,38 @@ def extract_one(task: ExtractTask, runtime: Runtime[AgentContext]) -> dict:
     return {"receipts": {rc["rc_id"]: rc}}
 
 
+def _duplicates(receipts: dict) -> dict:
+    """The same receipt found twice (forwarded, in two folders): later copies point to the first."""
+    first, dupes = {}, {}
+    for rc in sorted(receipts.values(), key=lambda r: r["rc_id"]):
+        key = (re.sub(r"\W", "", str(rc["merchant"]).lower())[:10], rc["date"], round(rc["amount"], 2), rc["currency"])
+        if key in first and not rc.get("duplicate_of"):
+            dupes[rc["rc_id"]] = {**rc, "duplicate_of": first[key]}
+        first.setdefault(key, rc["rc_id"])
+    return dupes
+
+
+def unique_receipts(receipts: dict) -> dict:
+    return {k: v for k, v in receipts.items() if not v.get("duplicate_of")}
+
+
 def reconcile(state: AuditState, runtime: Runtime[AgentContext]) -> dict:
-    tools.emit("match", f"Matching {len(state.get('receipts', {}))} receipts to "
-                        f"{len(state['transactions'])} card transactions")
-    matches, log = reconcile_receipts(state["transactions"], list(state.get("receipts", {}).values()),
-                                      runtime.context.smart, state.get("matches"))
+    dupes = _duplicates(state.get("receipts", {}))
+    receipts = [r for k, r in unique_receipts(state.get("receipts", {})).items() if k not in dupes]
+    purchases = [t for t in state["transactions"] if is_purchase(t)]
+    tools.emit("match", f"Matching {len(receipts)} receipts to {len(purchases)} card transactions"
+                        + (f" ({len(dupes)} duplicate receipt(s) merged)" if dupes else ""))
+    matches, log = reconcile_receipts(state["transactions"], receipts, runtime.context.smart, state.get("matches"))
     for line in log:
         tools.emit("match", line, "ok")
-    missing = len(state["transactions"]) - len(state.get("matches", {})) - len(matches)
+    done = {**state.get("matches", {}), **matches}
+    missing = len([t for t in purchases if t["tx_id"] not in done])
     tools.emit("match", f"{missing} transaction(s) still without a receipt", "warn" if missing else "ok")
-    return {"matches": matches}
+    return {"matches": matches, "receipts": dupes}
 
 
 def route_after_reconcile(state: AuditState) -> str:
-    missing = [t for t in state["transactions"] if t["tx_id"] not in state.get("matches", {})]
+    missing = [t for t in state["transactions"] if is_purchase(t) and t["tx_id"] not in state.get("matches", {})]
     return "hunter" if missing and state.get("hunt", True) else "file_receipts"
 
 
@@ -500,7 +673,8 @@ def hunter(state: AuditState, runtime: Runtime[AgentContext]) -> dict:
     history = state.get("messages") or []
     new = []
     if not history:
-        missing = [t for t in state["transactions"] if t["tx_id"] not in state.get("matches", {})][:HUNTER_MAX_TX]
+        missing = [t for t in state["transactions"]
+                   if is_purchase(t) and t["tx_id"] not in state.get("matches", {})][:HUNTER_MAX_TX]
         tools.emit("hunt", f"Searching deeper for {len(missing)} missing receipt(s)")
         new = [SystemMessage(prompts.HUNTER),
                HumanMessage(f"Window: {_window(state)}\nMissing (tx_id|date|card text|amount):\n" + "\n".join(
@@ -531,6 +705,8 @@ def build_rows(transactions: list[dict], receipts: dict, matches: dict) -> list[
     for t in transactions:
         m = matches.get(t["tx_id"])
         rc = receipts.get(m["receipt_id"]) if m and m.get("receipt_id") else None
+        if not is_purchase(t) and not rc:
+            continue
         rows.append({**t, "status": m["status"] if rc else (m or {}).get("status", "missing"),
                      "confidence": m["confidence"] if m else 0.0, "reason": (m or {}).get("reason", ""),
                      "by": (m or {}).get("by", ""), "receipt": rc})
@@ -538,7 +714,7 @@ def build_rows(transactions: list[dict], receipts: dict, matches: dict) -> list[
 
 
 def file_receipts(state: AuditState, runtime: Runtime[AgentContext]) -> dict:
-    receipts = {k: dict(v) for k, v in state.get("receipts", {}).items()}
+    receipts = {k: dict(v) for k, v in unique_receipts(state.get("receipts", {})).items()}
     tools.emit("save", f"Saving {len(receipts)} receipt(s) to Google Drive")
     for rc in receipts.values():
         if not rc.get("drive_link"):
@@ -578,7 +754,7 @@ def send_to_fortnox(state: AuditState, runtime: Runtime[AgentContext]) -> dict:
 
 def write_log(state: AuditState, runtime: Runtime[AgentContext]) -> dict:
     creds = runtime.context.creds
-    receipts = state.get("receipts", {})
+    receipts = unique_receipts(state.get("receipts", {}))
     rows = build_rows(state["transactions"], receipts, state.get("matches", {}))
     tools.emit("save", "Updating the receipt log in Google Sheets")
     links = {"sheet": tools.write_sheet(creds, rows, list(receipts.values())),
@@ -644,7 +820,7 @@ def run(creds, groq_key: str, transactions: list[dict], since: dt.date, until: d
     finally:
         tools._progress.reset(token)
     progress("done", f"Done. AI usage this run: about {tools.tokens_used() - start:,} tokens", "ok")
-    receipts = final.get("receipts", {})
+    receipts = unique_receipts(final.get("receipts", {}))
     return {"rows": build_rows(transactions, receipts, final.get("matches", {})),
             "receipts": list(receipts.values()), **final.get("links", {})}
 
