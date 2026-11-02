@@ -434,7 +434,8 @@ def search_inbox(state: AuditState, runtime: Runtime[AgentContext]) -> dict:
     tools.emit("search", f"Fetching emails from {_d(state['since']):%d %b} to {_d(state['until']):%d %b %Y}")
     # One structural scan of the whole window (operators only, no keywords) + the LLM's targeted searches.
     found = {m["id"]: m for m in tools.search_messages(
-        creds, f"{_window(state)} -in:sent -in:drafts -in:chats", WINDOW_SCAN_LIMIT)}
+        # mail you only sent (e.g. your own invoices) is skipped; anything in the inbox counts, also sent to yourself
+        creds, f"{_window(state)} {{in:inbox -in:sent}} -in:drafts -in:chats", WINDOW_SCAN_LIMIT)}
     for q in state["queries"]:
         try:
             found.update({m["id"]: m for m in tools.search_messages(creds, q, QUERY_SCAN_LIMIT)})

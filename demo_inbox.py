@@ -4,8 +4,8 @@
   python demo_inbox.py --set lahdo --check             # run every email through the real extraction prompt
   python demo_inbox.py --set lahdo --send              # send via Gmail SMTP
 
-Sending needs SMTP_USER + SMTP_PASSWORD (a Gmail app password) and DEMO_TO in .env. Send from a different
-account than the inbox you test: mail you send to yourself is labelled "Sent", and the agent skips sent mail.
+Sending needs SMTP_USER + SMTP_PASSWORD (a Gmail app password) and DEMO_TO in .env. Sending to yourself works:
+the agent reads everything in the inbox and skips only mail that was sent and never received.
 
 sample: sample_mynt_export.csv -> 8 matched, Bolt "check" (129 vs 132), Circle K + parking missing.
 lahdo:  a Mynt PDF statement (Oct 2026, 25 card lines) -> 6 receipts: 5 in SEK, Anthropic in USD (FX, LLM judges).
@@ -195,8 +195,6 @@ def check(name: str) -> None:
 
 def send(name: str, out: Path) -> None:
     user, password = os.environ["SMTP_USER"], os.environ["SMTP_PASSWORD"].replace(" ", "")
-    if user.lower() == TO.lower():
-        sys.exit("SMTP_USER and DEMO_TO are the same account: the agent skips mail you sent yourself.")
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
         smtp.login(user, password)
         for sender, subject, body, pdf_name, _ in emails(name):
