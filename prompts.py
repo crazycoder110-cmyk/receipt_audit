@@ -28,4 +28,9 @@ HUNTER = RULES + (" Find receipts for the missing card transactions in Gmail (re
 
 STATEMENT = RULES + " Map the columns of this card statement export from its first rows (row numbers are 0-based)."
 
-STATEMENT_PDF = RULES + " List the card purchases in this statement. Skip payments, top-ups, fees, totals. Amounts positive."
+STATEMENT_PDF = RULES + (" List every money row in this statement (not balances or totals) and set its kind. "
+                         "The text keeps the page layout: a value belongs to the column header above it. "
+                         "amount = the money of that row (never a card number, balance or reference). A row's "
+                         "description can continue on the next lines without amounts: join them; the merchant is "
+                         "often there (e.g. UPI/ref/ then SHOP/...). "
+                         "Merchant = the shop or service name from the description. Amounts positive.")

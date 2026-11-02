@@ -133,7 +133,8 @@ def tokens_used() -> int:
 
 
 def _estimate(*texts: Any, out: int = 400) -> int:
-    return sum(len(str(t)) for t in texts) // 3 + out   # ~3 chars/token incl. non-latin scripts
+    # ~3 chars/token incl. non-latin scripts; a run of spaces (layout text) is about one token
+    return sum(len(re.sub(r"\s+", " ", str(t))) for t in texts) // 3 + out
 
 
 def call(llm, messages: list, out: int = 400):
@@ -141,14 +142,49 @@ def call(llm, messages: list, out: int = 400):
     return llm.invoke(messages)
 
 
+# Groq's free daily token limit is per model: when one model has used its day, the other one takes over.
+_OTHER_MODEL: dict[str, Any] = {}
+
+
+def pair_models(a, b) -> None:
+    _OTHER_MODEL[a.model_name], _OTHER_MODEL[b.model_name] = b, a
+
+
+def _daily_limit(e: Exception) -> bool:
+    import groq
+    return isinstance(e, groq.RateLimitError) and any(k in str(e).lower() for k in ("per day", "tpd", "rpd"))
+
+
+def with_daily_fallback(llm, call):
+    """call(model) on llm; if llm's daily limit is used up, the same call on the paired model."""
+    try:
+        return call(llm)
+    except Exception as e:
+        other = _OTHER_MODEL.get(getattr(llm, "model_name", ""))
+        if other is None or not _daily_limit(e):
+            raise
+        emit("ai", f"Groq daily limit reached for {llm.model_name}; continuing with {other.model_name}", "warn")
+        return call(other.model_copy(update={"max_tokens": llm.max_tokens}))
+
+
 def structured(llm, schema: type[BaseModel], system: str, user: str, out: int = 400) -> BaseModel:
     """Strict JSON-schema output (guaranteed shape); falls back to tool-calling mode if strict is rejected."""
+    return with_daily_fallback(llm, lambda model: _structured(model, schema, system, user, out))
+
+
+def _structured(llm, schema: type[BaseModel], system: str, user: str, out: int) -> BaseModel:
     messages = [SystemMessage(system), HumanMessage(user)]
     budget(llm).acquire(_estimate(system, user, json.dumps(schema.model_json_schema()), out=out))
-    try:
-        return llm.with_structured_output(schema, method="json_schema", strict=True).invoke(messages)
-    except Exception:
-        return llm.with_structured_output(schema, method="function_calling").invoke(messages)
+    import groq
+    strict = llm.with_structured_output(schema, method="json_schema", strict=True)
+    for attempt in range(2):  # a failed strict generation usually succeeds on a second try
+        try:
+            return strict.invoke(messages)
+        except (groq.RateLimitError, groq.AuthenticationError, groq.APIConnectionError):
+            raise
+        except Exception:
+            pass
+    return llm.with_structured_output(schema, method="function_calling").invoke(messages)
 
 
 class ExtractedDocument(BaseModel):
@@ -258,43 +294,74 @@ def fetch_attachment(creds, msg_id: str, attachment_id: str) -> bytes:
 
 # ---------------------------------------------------------------- PDF + vision
 
-def _page_lines(page) -> str:
-    """Text in visual rows. PDF text order can be column by column (e.g. card statements), which would
-    separate each date from its description and amount."""
+def _page_lines(page, layout: bool = False) -> str:
+    """Text in visual rows, rebuilt from character boxes. PDF text order can be column by column (card statements)
+    and some PDFs place every glyph separately, so rows and spaces come from positions, not from the text stream.
+    layout=True also keeps horizontal positions, so a value stays under its column header (Deposit vs Withdrawal)."""
     tp = page.get_textpage()
-    segments = []
-    for i in range(tp.count_rects()):
-        left, bottom, right, top = tp.get_rect(i)
-        text = tp.get_text_bounded(left, bottom, right, top).strip()
-        if text:
-            segments.append((left, bottom, right, top, text))
-    rows: list[dict] = []  # a piece joins a row when they overlap vertically (letters like g, j, p hang lower)
-    for left, bottom, right, top, text in sorted(segments, key=lambda s: -s[3]):
+    chars = []
+    for i in range(tp.count_chars()):
+        c = tp.get_text_range(i, 1)
+        if not c or c.isspace():
+            continue
+        left, bottom, right, top = tp.get_charbox(i, loose=True)  # loose: font advance and line height
+        if right > left and top > bottom:
+            chars.append((left, bottom, right, top, c))
+    rows: list[dict] = []
+    for left, bottom, right, top, c in sorted(chars, key=lambda ch: (-ch[3], ch[0])):
         for row in rows:
             overlap = min(top, row["top"]) - max(bottom, row["bottom"])
             if overlap > 0.5 * min(top - bottom, row["top"] - row["bottom"]):
-                row["parts"].append((left, right, top - bottom, text))
-                row["top"], row["bottom"] = max(top, row["top"]), min(bottom, row["bottom"])
+                row["chars"].append((left, right, c))
                 break
         else:
-            rows.append({"top": top, "bottom": bottom, "parts": [(left, right, top - bottom, text)]})
+            rows.append({"top": top, "bottom": bottom, "chars": [(left, right, c)]})
+    widths = sorted(r - l for l, _, r, _, _ in chars)
+    cell = 1.5 * widths[len(widths) // 2] if widths else 6.0  # one text column per 1.5 average characters
     lines = []
     for row in sorted(rows, key=lambda r: -r["top"]):
         line, prev_right, height = "", None, row["top"] - row["bottom"]
-        for left, right, _, text in sorted(row["parts"]):
+        for left, right, c in sorted(row["chars"]):
             gap = left - prev_right if prev_right is not None else 0
-            line += ("" if gap < 0.15 * height else " " if gap < 1.2 * height else "  ") + text
-            prev_right = max(right, prev_right or right)
-        lines.append(line.strip())
+            space = "" if gap < 0.15 * height else " " if gap < 1.5 * height else "  "
+            if layout:
+                line = line.ljust(max(round(left / cell), len(line) + len(space)))
+            else:
+                line += space
+            line += c
+            prev_right = right
+        lines.append(line.rstrip() if layout else line.strip())
     return "\n".join(lines)
 
 
-def pdf_text(data: bytes, max_pages: int = 3) -> str:
+class PdfLocked(Exception):
+    """The PDF is password protected. `wrong` when a password was given but did not open it."""
+
+    def __init__(self, wrong: bool):
+        super().__init__("The password did not open this PDF." if wrong else "This PDF is password protected.")
+        self.wrong = wrong
+
+
+def open_pdf(data: bytes, password: str | None = None) -> pdfium.PdfDocument:
     try:
-        pdf = pdfium.PdfDocument(data)
-        return "\n".join(_page_lines(pdf[i]) for i in range(min(len(pdf), max_pages)))
+        return pdfium.PdfDocument(data, password=password or None)
+    except pdfium.PdfiumError as e:
+        if getattr(e, "err_code", None) == pdfium.raw.FPDF_ERR_PASSWORD:
+            raise PdfLocked(wrong=bool(password)) from e
+        raise
+
+
+def pdf_pages(data: bytes, max_pages: int = 3, layout: bool = False, password: str | None = None) -> list[str]:
+    """Text per page; pages without a text layer (scans) and unreadable or locked PDFs give no text."""
+    try:
+        pdf = open_pdf(data, password)
+        return [t for t in (_page_lines(pdf[i], layout) for i in range(min(len(pdf), max_pages))) if t.strip()]
     except Exception:
-        return ""
+        return []
+
+
+def pdf_text(data: bytes, max_pages: int = 3, layout: bool = False) -> str:
+    return "\n".join(pdf_pages(data, max_pages, layout))
 
 
 def pdf_images(data: bytes, max_pages: int = 1) -> list[bytes]:

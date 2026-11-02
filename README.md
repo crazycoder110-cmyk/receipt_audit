@@ -150,6 +150,10 @@ for what is missing, and receipts in any language and currency (tested: Swedish,
   `owner`). Unsure → "Is this it?" suggestion, never a silent guess. One receipt per transaction.
 - **Exceptions in one tap**: confirm the suggestion, upload a photo or PDF (camera on mobile, filed in Drive), or
   mark "no receipt". The Sheet updates immediately.
+- **Statements read like a person would**: only the transaction table goes to the AI (rows that start with a date
+  and end with an amount; pages of terms, rewards or notices are skipped), the page layout is kept so a value stays
+  under its column (Deposit vs Withdrawal), and incoming money is caught by arithmetic on the running balance.
+  Password-protected PDFs ask for the password in the app (used once, never stored). Up to 5 pages for now.
 - **Plain progress**: the activity log says what happens ("Found 11 emails in the period", "Read receipt: Vy …"),
   and AI provider problems are named ("Groq issue: the AI rate limit was reached").
 - **GDPR**: "Disconnect and delete my data" revokes the Google token; sessions live in server memory only and expire
@@ -176,6 +180,15 @@ for what is missing, and receipts in any language and currency (tested: Swedish,
 2. Postgres (EU) + LangGraph checkpointer: persist runs, owner decisions, multi-tenant, resumable nightly jobs.
 3. Outlook / Microsoft 365 and extra inboxes (one click each); Pleo API and open-banking card feeds.
 4. Learn merchant aliases from owner confirmations (`BOLT.EU/O` → Bolt) to raise the auto-match rate.
+
+### Smart statement reading (after approval, with a paid model tier)
+
+- Statements of 100 to 1,000+ pages: find the transaction pages first, then read them in parallel batches.
+- Read the statement period from the PDF and use exactly that window for the Gmail search, per card.
+- Failed, reversed and refunded transactions: pair them up and leave them out of matching.
+- Per-bank layout memory: learn each bank's columns once, then read them without the AI.
+- Limits per run (e.g. max transactions per statement) with a clear message, and OCR for scanned statements.
+- Smarter Gmail search: per-merchant sender domains learned from earlier matches.
 
 ## Estimated running cost per user
 

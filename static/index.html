@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/app.css?v=2">
+  <link rel="stylesheet" href="/static/app.css?v=3">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23180F21'/%3E%3Cpath d='M10 8h12v16l-3-2-3 2-3-2-3 2z' fill='%23FFE07A'/%3E%3C/svg%3E">
 </head>
 <body>
@@ -94,6 +94,7 @@
             <span class="drop-busy"><span class="scanbar"></span><b id="drop-busy-msg">Reading your statement</b></span>
           </label>
           <button class="btn btn-ghost full" id="use-sample" data-i18n="sample">Use the sample Mynt export</button>
+          <div id="statement-lock"></div>
           <div id="statement-summary"></div>
         </article>
         <article class="card step" id="step3">
@@ -196,6 +197,6 @@
 
 <div id="toasts" class="toasts"></div>
 <div id="modal" class="modal" hidden></div>
-<script src="/static/app.js?v=2"></script>
+<script src="/static/app.js?v=3"></script>
 </body>
 </html>

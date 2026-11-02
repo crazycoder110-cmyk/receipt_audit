@@ -122,12 +122,16 @@ class StatementLayout(BaseModel):
 
 
 class StatementLine(BaseModel):
+    kind: Literal["purchase", "top_up", "cash", "transfer", "fee", "incoming"] = Field(
+        description="purchase = paid to a shop or service (card, online, UPI, direct debit)")
     date: str = Field(description="YYYY-MM-DD")
     description: str
     amount: float
     currency: Optional[str]
     original_amount: Optional[float]
     original_currency: Optional[str]
+    balance_before: Optional[float] = Field(description="Running balance printed on the row above, else null")
+    balance_after: Optional[float] = Field(description="Running balance printed on this row, else null")
 
 
 class StatementLines(BaseModel):
@@ -141,7 +145,9 @@ def make_context(creds, groq_key: str, home_currency: str = "SEK", fortnox=None)
         # low reasoning effort keeps hidden reasoning tokens (which count against TPM) small
         return ChatGroq(model=model, api_key=groq_key, temperature=0, reasoning_effort="low",
                         max_tokens=max_tokens, max_retries=4)
-    return AgentContext(creds=creds, fast=llm(GROQ_FAST_MODEL, 1200), smart=llm(GROQ_MODEL, 2500),
+    fast, smart = llm(GROQ_FAST_MODEL, 1200), llm(GROQ_MODEL, 4000)
+    tools.pair_models(fast, smart)
+    return AgentContext(creds=creds, fast=fast, smart=smart,
                         vision=ChatGroq(model=GROQ_VISION_MODEL, api_key=groq_key, temperature=0, max_tokens=600,
                                         max_retries=3),
                         home_currency=home_currency, fortnox=fortnox)
@@ -186,17 +192,96 @@ def _read_table(data: bytes, filename: str) -> pd.DataFrame:
     return pd.DataFrame([r + [None] * (width - len(r)) for r in rows], dtype=str)
 
 
-def load_statement(file, filename: str, ctx: AgentContext) -> list[dict]:
-    """Card statement (CSV / Excel / PDF) -> purchases. The LLM reads the layout, so any export format works."""
+def _incoming_by_balance(lines: list[StatementLine]) -> set[int]:
+    """Arithmetic beats reading columns: where the running balance rose by exactly the row's amount, the money came
+    in. Every money row is listed in order, so the balance before a row is the previous row's balance after."""
+    incoming, previous = set(), None
+    for i, line in enumerate(lines):
+        before = line.balance_before if line.balance_before is not None else previous
+        if line.balance_after is not None:
+            if before is not None and abs(line.balance_after - before - abs(line.amount)) < 0.02:
+                incoming.add(i)
+            previous = line.balance_after
+    return incoming
+
+
+# ---------------------------------------------------------------- statement PDFs: only the transaction table
+
+MAX_STATEMENT_PAGES = 5
+# a transaction row has a date and an amount, in any language: 2026-10-04, 04/10/2026, 18 Jun 19, Oct 4, 2026
+_DATE = re.compile(r"\b(?:\d{4}[-./]\d{1,2}[-./]\d{1,2}|\d{1,2}[-./]\d{1,2}[-./]\d{2,4}"
+                   r"|\d{1,2}\s?[^\W\d_]{3,9}\.?,?\s?\d{2,4}|[^\W\d_]{3,9}\.?\s\d{1,2},?\s\d{2,4})\b")
+_AMOUNT = re.compile(r"\d[\d\s,.']*[.,]\d{2}(?!\d)")
+
+
+class StatementTooLong(ValueError):
+    def __init__(self, pages: int):
+        super().__init__(f"This PDF has {pages} pages. For now statements can have at most {MAX_STATEMENT_PAGES} "
+                         "pages: upload the pages with the transactions.")
+        self.pages = pages
+
+
+def _transaction_lines(lines: list[str]) -> list[int]:
+    """Rows start with a date and end with an amount (maybe followed by Dr/Cr or a balance). Sentences in terms and
+    notices also contain dates and amounts, but not in that shape."""
+    return [i for i, line in enumerate(lines)
+            if _DATE.match(line.strip()) and any(_AMOUNT.search(t) for t in line.split()[-3:])]
+
+
+def statement_tables(pages: list[str]) -> list[str]:
+    """Keep only the transaction table of each page: a few lines above the first row (column headers), up to a few
+    lines after the last row (descriptions continue below). Pages of terms, rewards or notices are dropped.
+    The short header lines of page 1 (period, currency, card) go in front of the first table."""
+    tables = []
+    for text in pages:
+        lines = text.splitlines()
+        rows = _transaction_lines(lines)
+        if len(rows) >= 2:
+            tables.append("\n".join(lines[max(0, rows[0] - 3):min(len(lines), rows[-1] + 5)]))
+    if tables and pages:
+        first = pages[0].splitlines()
+        rows = _transaction_lines(first)
+        head = [l for l in first[:rows[0] - 3 if rows else 40] if 0 < len(l.split()) <= 12][:15]
+        tables[0] = "\n".join(head + [tables[0]])
+    return tables
+
+
+def load_statement(file, filename: str, ctx: AgentContext, password: str | None = None,
+                   info: dict | None = None) -> list[dict]:
+    """Card statement (CSV / Excel / PDF) -> purchases. The LLM reads the layout, so any export format works.
+    PDFs: raises tools.PdfLocked (needs a password) or StatementTooLong; `info` gets the pages used."""
     data = file.read() if hasattr(file, "read") else open(file, "rb").read()
     if filename.lower().endswith(".pdf"):
-        text = tools.pdf_text(data, max_pages=10) or tools.vision_read(ctx.vision, tools.pdf_images(data, 3))
-        lines = structured(ctx.smart, StatementLines, prompts.STATEMENT_PDF, tools.compact(text, 12000),
-                           out=2000).transactions
+        pdf = tools.open_pdf(data, password)
+        if len(pdf) > MAX_STATEMENT_PAGES:
+            raise StatementTooLong(len(pdf))
+        # page layout kept (a value stays under its column header) and whole lines, not compact():
+        # descriptions often continue on lines without digits. Only transaction tables go to the LLM, in chunks
+        # of pages so each answer stays short enough to be complete.
+        text_pages = [tools._page_lines(pdf[i], layout=True) for i in range(len(pdf))]
+        pages = statement_tables(text_pages)
+        if info is not None:
+            info.update(pages=len(pdf), used_pages=len(pages))
+        if not pages and not any(p.strip() for p in text_pages):  # a scan without a text layer
+            pages = [tools.vision_read(ctx.vision, tools.pdf_images(data, MAX_STATEMENT_PAGES))]
+        if not pages:
+            raise ValueError("No transactions found in this PDF.")
+        chunks, size = [""], 0
+        for page in pages:
+            page_size = len(" ".join(page.split()))
+            if chunks[-1] and size + page_size > 5000:
+                chunks.append("")
+                size = 0
+            chunks[-1] += page + "\n"
+            size += page_size
+        lines = [l for chunk in chunks
+                 for l in structured(ctx.smart, StatementLines, prompts.STATEMENT_PDF, chunk, out=2500).transactions]
+        incoming = _incoming_by_balance(lines)
         rows = [{"date": l.date, "merchant": l.description, "amount": abs(l.amount),
                  "currency": (l.currency or ctx.home_currency).upper(),
                  "orig_amount": abs(l.original_amount) if l.original_amount else None,
-                 "orig_currency": l.original_currency or None} for l in lines]
+                 "orig_currency": l.original_currency or None}
+                for i, l in enumerate(lines) if l.kind == "purchase" and i not in incoming]
     else:
         raw = _read_table(data, filename)
         preview = "\n".join(f"{i}: " + "|".join("" if pd.isna(v) else str(v)[:40] for v in row)
@@ -423,8 +508,10 @@ def hunter(state: AuditState, runtime: Runtime[AgentContext]) -> dict:
                    for t in missing))]
     ctx = runtime.context
     messages = history + new
-    tools.budget(ctx.smart).acquire(tools._estimate(*(m.content for m in messages), out=700))
-    reply = ctx.smart.bind_tools(tools.HUNTER_TOOLS).invoke(messages)
+    def think(model):
+        tools.budget(model).acquire(tools._estimate(*(m.content for m in messages), out=700))
+        return model.bind_tools(tools.HUNTER_TOOLS).invoke(messages)
+    reply = tools.with_daily_fallback(ctx.smart, think)
     steps = state.get("hunter_steps", 0) + 1
     if not reply.tool_calls or steps >= HUNTER_MAX_STEPS:
         tools.emit("hunt", "Deeper search finished")

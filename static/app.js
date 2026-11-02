@@ -13,7 +13,12 @@ const I18N = {
     step2: "Add your card statement", upload_hint: "Any card or bank export: CSV, Excel or PDF. Mynt, Pleo, any bank.",
     drop_title: "Drop your statement here", drop_sub: "or click to choose a file", sample: "Use the sample Mynt export",
     reading: ["Reading your statement", "Finding the columns", "Collecting card purchases"],
-    purchases: "{n} purchases", step3: "Run the agent", period: "Look for receipts from",
+    purchases: "{n} purchases", pages_used: "{used} of {pages} pages had transactions",
+    locked_title: "This PDF is password protected",
+    locked_text: "Enter its password to open it here. It is used once and never stored. Or remove the password and upload the file again.",
+    pdf_password: "PDF password", unlock: "Open PDF", wrong_pw: "That password did not open the PDF. Try again.",
+    too_many: "This PDF has {n} pages. For now the limit is 5 pages: upload only the pages with your transactions.",
+    step3: "Run the agent", period: "Look for receipts from",
     periods: ["Statement period", "Last 24 hours", "Last 7 days"],
     nightly: "This is the job the agent runs every night. Run it now to see it work.", run: "Run agent now",
     how_eyebrow: "How it works", how_title: "What happens when you run it",
@@ -64,7 +69,12 @@ const I18N = {
     step2: "Lägg till kortutdraget", upload_hint: "Valfri export från kort eller bank: CSV, Excel eller PDF.",
     drop_title: "Släpp utdraget här", drop_sub: "eller klicka för att välja fil", sample: "Använd exempel-export från Mynt",
     reading: ["Läser ditt utdrag", "Hittar kolumnerna", "Samlar kortköpen"],
-    purchases: "{n} köp", step3: "Kör agenten", period: "Leta efter kvitton från",
+    purchases: "{n} köp", pages_used: "{used} av {pages} sidor hade transaktioner",
+    locked_title: "PDF:en är lösenordsskyddad",
+    locked_text: "Ange lösenordet för att öppna den här. Det används en gång och sparas aldrig. Eller ta bort lösenordet och ladda upp filen igen.",
+    pdf_password: "PDF-lösenord", unlock: "Öppna PDF", wrong_pw: "Lösenordet öppnade inte PDF:en. Försök igen.",
+    too_many: "PDF:en har {n} sidor. Gränsen är just nu 5 sidor: ladda upp bara sidorna med dina transaktioner.",
+    step3: "Kör agenten", period: "Leta efter kvitton från",
     periods: ["Utdragets period", "Senaste dygnet", "Senaste 7 dagarna"],
     nightly: "Det här jobbet kör agenten varje natt. Kör nu för att se hur det fungerar.", run: "Kör agenten nu",
     how_eyebrow: "Så fungerar det", how_title: "Det här händer när du kör",
@@ -130,7 +140,7 @@ const ICON = {
 async function api(path, opts = {}) {
   const res = await fetch(path, { credentials: "same-origin", ...opts });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  if (!res.ok) throw Object.assign(new Error(data.error || `Request failed (${res.status})`), { data });
   return data;
 }
 const post = (path, body) => api(path, { method: "POST", ...(body instanceof FormData ? { body } :
@@ -196,7 +206,7 @@ function renderOnboard() {
   const st = S.statement;
   $("#step2").classList.toggle("done", !!st);
   $("#step2-tag").className = st ? "tag ok" : "tag"; $("#step2-tag").textContent = st ? T.done : "";
-  $("#statement-summary").innerHTML = st ? `<div class="summary"><div class="summary-head"><span>${esc(st.name)}</span><span>${fmt(T.purchases, { n: st.count })} · ${esc(st.first)} – ${esc(st.last)}</span></div>
+  $("#statement-summary").innerHTML = st ? `<div class="summary"><div class="summary-head"><span>${esc(st.name)}</span><span>${fmt(T.purchases, { n: st.count })} · ${esc(st.first)} – ${esc(st.last)}${st.pages ? ` · ${fmt(T.pages_used, { used: st.used_pages, pages: st.pages })}` : ""}</span></div>
     <table>${st.preview.map((t) => `<tr><td>${esc(t.date)}</td><td>${esc(t.merchant)}</td><td>${money(t.amount, t.currency)}</td></tr>`).join("")}</table></div>` : "";
   $("#step3").classList.toggle("locked", !st);
   $("#period").innerHTML = T.periods.map((p, i) => `<button data-p="${i}" class="${i === period ? "on" : ""}">${esc(p)}</button>`).join("");
@@ -314,16 +324,30 @@ function wireTodo(x) {
 }
 
 /* ---------------------------------------------------------------- actions */
-async function uploadStatement(file, sample) {
+async function uploadStatement(file, sample, password) {
   const drop = $("#drop");
   drop.classList.add("busy");
   let i = 0; $("#drop-busy-msg").textContent = T.reading[0];
   const t = setInterval(() => { i = (i + 1) % T.reading.length; $("#drop-busy-msg").textContent = T.reading[i]; }, 1500);
   const fd = new FormData();
   if (sample) fd.append("sample", "1"); else fd.append("file", file);
-  try { S = await post("/api/statement", fd); renderOnboard(); }
-  catch (e) { toast(e.message, "error"); }
+  if (password) fd.append("password", password);
+  try { S = await post("/api/statement", fd); $("#statement-lock").innerHTML = ""; renderOnboard(); }
+  catch (e) {
+    const code = e.data && e.data.code;
+    if (code === "password_required" || code === "password_wrong") showLocked(file, code === "password_wrong");
+    else { $("#statement-lock").innerHTML = ""; toast(code === "too_many_pages" ? fmt(T.too_many, { n: e.data.pages }) : e.message, "error"); }
+  }
   finally { clearInterval(t); drop.classList.remove("busy"); $("#statement-file").value = ""; }
+}
+
+// Password-protected statement: ask here instead of making the owner remove it first.
+function showLocked(file, wrong) {
+  $("#statement-lock").innerHTML = `<div class="locked"><b>${T.locked_title}</b><p>${T.locked_text}</p>
+    <form class="pw-row" id="pw-form"><input type="password" id="pdf-pw" placeholder="${T.pdf_password}" autocomplete="off" required>
+    <button class="btn btn-dark" type="submit">${T.unlock}</button></form>${wrong ? `<small class="pw-err">${T.wrong_pw}</small>` : ""}</div>`;
+  $("#pdf-pw").focus();
+  $("#pw-form").onsubmit = (ev) => { ev.preventDefault(); uploadStatement(file, false, $("#pdf-pw").value); };
 }
 
 async function startRun() {

@@ -56,6 +56,7 @@ class Session:
     fortnox: dict | None = None
     statement: list | None = None
     statement_name: str = ""
+    statement_pages: dict = field(default_factory=dict)   # {"pages": 5, "used_pages": 1} for PDFs
     result: dict | None = None
     events: list = field(default_factory=list)
     running: bool = False
@@ -121,7 +122,7 @@ def state_view(s: Session) -> dict:
         "demo": s.demo,
         "fortnox": {"configured": fortnox.configured(), "connected": bool(s.fortnox)},
         "statement": {"name": s.statement_name, "count": len(s.statement), "first": fmt_date(s.statement[0]["date"]),
-                      "last": fmt_date(s.statement[-1]["date"]),
+                      "last": fmt_date(s.statement[-1]["date"]), **s.statement_pages,
                       "preview": [{k: t.get(k) for k in ("date", "merchant", "amount", "currency")}
                                   for t in s.statement[:5]]} if s.statement else None,
         "running": s.running, "error": s.error, "events": len(s.events),
@@ -223,7 +224,7 @@ def demo(request: Request):
 
 
 @app.post("/api/statement")
-def statement(request: Request, file: UploadFile | None = File(None), sample: str = Form("")):
+def statement(request: Request, file: UploadFile | None = File(None), sample: str = Form(""), password: str = Form("")):
     sid, s = session(request)
     if not (s.creds or s.demo):
         return respond(sid, {"error": "Connect Google or choose sample data first."}, 400)
@@ -231,8 +232,13 @@ def statement(request: Request, file: UploadFile | None = File(None), sample: st
     if not data:
         return respond(sid, {"error": "No file received."}, 400)
     try:
-        ctx = agent.make_context(s.creds, GROQ_KEY)
-        s.statement, s.statement_name = agent.load_statement(io.BytesIO(data), name, ctx), name
+        ctx, info = agent.make_context(s.creds, GROQ_KEY), {}
+        rows = agent.load_statement(io.BytesIO(data), name, ctx, password=password or None, info=info)
+        s.statement, s.statement_name, s.statement_pages = rows, name, info
+    except tools.PdfLocked as e:  # the password is used once to open the file and never stored
+        return respond(sid, {"error": str(e), "code": "password_wrong" if e.wrong else "password_required"}, 400)
+    except agent.StatementTooLong as e:
+        return respond(sid, {"error": str(e), "code": "too_many_pages", "pages": e.pages}, 400)
     except Exception as e:
         return respond(sid, {"error": f"Could not read this file. {tools.friendly_error(e)}"}, 400)
     if not s.statement:

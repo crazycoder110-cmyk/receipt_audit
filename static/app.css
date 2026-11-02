@@ -270,3 +270,8 @@ td .why { color: var(--muted); font-size: 13px; }
 .home-link:hover { color: var(--khaki); border-color: var(--khaki); }
 .home-link svg { width: 16px; height: 16px; }
 @media (max-width: 760px) { .home-link span { display: none; } }
+.locked { border: 1.5px solid var(--khaki-dark); background: var(--lemon); border-radius: 12px; padding: 14px; }
+.locked b { display: block; } .locked p { margin: 4px 0 10px; font-size: 13px; color: var(--muted); }
+.pw-row { display: flex; gap: 8px; }
+.pw-row input { flex: 1; min-width: 0; border: 1px solid var(--line-2); border-radius: 10px; padding: 10px 12px; font: inherit; background: #fff; }
+.pw-err { display: block; margin-top: 8px; color: var(--bad); font-weight: 700; }

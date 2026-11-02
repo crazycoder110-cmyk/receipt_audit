@@ -9,6 +9,8 @@ account than the inbox you test: mail you send to yourself is labelled "Sent", a
 
 sample: sample_mynt_export.csv -> 8 matched, Bolt "check" (129 vs 132), Circle K + parking missing.
 lahdo:  a Mynt PDF statement (Oct 2026, 25 card lines) -> 6 receipts: 5 in SEK, Anthropic in USD (FX, LLM judges).
+india:  a 4-page Indian bank statement (Jun-Jul 2019, INR) -> 10 receipts (GST, Tamil/Hindi lines). Received
+        today, so run the app with 'Last 7 days'.
 """
 import os
 import smtplib
@@ -104,6 +106,60 @@ SETS = {
          "RECEIPT\nVolvo Car Corporation\nReceipt no: SE-77120\nDate: 2026-10-19\n\n"
          "Volvo Cars app - Connected services, 12 months          344,00\nMoms 25 %                                                 86,00\n"
          "Total SEK                                               430,00\nPaid with card **** 1622"),
+    ],
+    "india": [
+        ("Ananda Vilas Hotel", "Your bill from Ananda Vilas Hotel, Virudhunagar",
+         "Dear guest,\nThank you for dining with us. Please find your bill attached.\n\nAnanda Vilas Hotel, Virudhunagar",
+         "AnandaVilas_bill_4417.pdf",
+         "ANANDA VILAS HOTEL\nMain Bazaar, Virudhunagar, Tamil Nadu\nGSTIN: 33AAAAA0000A1Z5\nTAX INVOICE  Bill No: 4417\n"
+         "Date: 18-06-2019  13:41   Table 6\n\nMeals (South Indian)   2 x 180.00     360.00\nParotta with kurma     2 x 120.00     240.00\n"
+         "Chicken 65             1 x 220.00     220.00\nFilter coffee          4 x 25.00      100.00\n\nSub total                            920.00\n"
+         "CGST 2.5%                             23.00\nSGST 2.5%                             23.00\nGrand total (INR)                    966.00\n"
+         "Paid by card ****7031"),
+        ("ixigo", "Booking confirmed: Chennai Egmore to Madurai, PNR 4219887563",
+         "Hi Seenivasan,\nYour train ticket is confirmed. E-ticket attached.\n\nTeam ixigo",
+         "ixigo_eticket_IXG61928874.pdf",
+         "ixigo trains - E-TICKET / PAYMENT RECEIPT\nLe Travenues Technology Pvt Ltd (ixigo)\nBooking ID: IXG61928874   PNR: 4219887563\n"
+         "Booked on: 21 Jun 2019\nTrain 12635 Vaigai Express, Chennai Egmore (MS) to Madurai Jn (MDU)\nJourney: 24 Jun 2019, Chair car (CC), 2 adults\n\n"
+         "Ticket fare                         1,165.00\nIRCTC convenience fee (incl. GST)      35.40\nixigo service fee (incl. GST)          35.09\n"
+         "Total paid (INR)                    1,235.49\nPaid via UPI"),
+        ("Paytm", "Payment successful - Rs 10.17",
+         "Paytm\nPayment successful\n\nAmount: Rs 10.17\nPaid to: One97 Communications Ltd (Paytm)\nFor: Mobile recharge processing\n"
+         "Order ID: OID20190621050469855386\nDate: 21 Jun 2019, 18:22\nPaid via UPI", None, None),
+        ("Amazon.in", "Your Amazon.in order of \"Prestige electric kettle 1.5 L\" has been placed",
+         "Hello,\nThank you for your order.\n\nOrder #407-6631957-2213925\nPlaced on 25 June 2019\n\n"
+         "Prestige electric kettle 1.5 L     Rs 449.00\nDelivery                           FREE\n\nOrder total: Rs 449.00\n"
+         "(includes GST 18%: Rs 68.49)\nPaid with Amazon Pay UPI", None, None),
+        ("BillDesk", "TNEB electricity bill payment successful",
+         "Dear customer,\nYour electricity bill payment was successful. Receipt attached.\n\n"
+         "உங்கள் மின் கட்டணம் வெற்றிகரமாக செலுத்தப்பட்டது.\n\nBillDesk", "TNEB_receipt_0904-118-332.pdf",
+         "PAYMENT RECEIPT\nTamil Nadu Generation and Distribution Corporation (TANGEDCO / TNEB)\nPayment through BillDesk\n"
+         "Service number: 09-041-118-332\nBill period: Apr - May 2019\nPayment date: 25-06-2019\nTransaction ref: TNEB2561904417\n\n"
+         "Amount paid (INR): 500.00\nMode: UPI\nStatus: SUCCESS"),
+        ("Airtel", "Recharge successful - Rs 399 on 98410 XXXXX",
+         "Airtel\nआपका रिचार्ज सफल रहा। / Your recharge was successful.\n\nMobile: 98410 XXXXX\nPlan: Rs 399 - 1.5 GB/day, unlimited calls, 56 days\n"
+         "Date: 28 Jun 2019\nAmount paid: Rs 399.00 (incl. GST 18% Rs 60.86)\nTransaction ID: AIR7915639982\nPaid via UPI", None, None),
+        ("G R Thangamaligai", "Tax invoice - G R Thangamaligai, T. Nagar",
+         "Dear Sir,\nThank you for shopping with G R Thangamaligai. Your tax invoice is attached.",
+         "GRT_invoice_TN-2019-88214.pdf",
+         "G R THANGAMALIGAI\nUsman Road, T. Nagar, Chennai 600017\nGSTIN: 33BBBBB0000B1Z3\nTAX INVOICE No: TN-2019-88214   Date: 29-06-2019\n\n"
+         "22K gold ear studs, 3.120 g\n  Gold value @ 3,630/g               11,325.60\n  Making charges                      2,266.64\n"
+         "Taxable value                         13,592.24\nCGST 1.5%                                 203.88\nSGST 1.5%                                 203.88\n"
+         "Invoice total (INR)                   14,000.00\nPaid by card ****7031"),
+        ("Amazon.in", "Your Amazon.in order of \"boAt Rockerz 255 earphones\" has been placed",
+         "Hello,\nThank you for your order.\n\nOrder #171-2280415-6623518\nPlaced on 1 July 2019\n\n"
+         "boAt Rockerz 255 wireless earphones     Rs 700.00\nDelivery                               FREE\n\n"
+         "Order total: Rs 700.00\n(includes GST 18%: Rs 106.78)\nPaid with Amazon Pay UPI", None, None),
+        ("Lakshmi Kantham Service Station", "Fuel e-receipt - Lakshmi Kantham Service Station",
+         "LAKSHMI KANTHAM SERVICE STATION\nIndianOil dealer, Anna Nagar, Chennai\n\nFuel e-receipt\nDate: 01-07-2019  20:13\n"
+         "Product: Petrol\nRate: Rs 73.75 / L\nVolume: 4.12 L\nAmount: Rs 303.86\nPaid by card ****7031\nThank you, visit again", None, None),
+        ("Lifestyle", "Your Lifestyle invoice - Express Avenue, Chennai",
+         "Hi,\nThank you for shopping at Lifestyle. Your invoice is attached.\n\nLifestyle Stores",
+         "Lifestyle_invoice_EA-77120.pdf",
+         "LIFESTYLE INTERNATIONAL PVT LTD\nExpress Avenue Mall, Royapettah, Chennai\nGSTIN: 33CCCCC0000C1Z1\nTAX INVOICE No: EA-77120   Date: 13-07-2019  20:51\n\n"
+         "Men's cotton shirt              1 x 1,599.00\nMen's slim jeans                1 x 2,000.00\n\nTotal (incl. GST)                 3,599.00\n"
+         "Taxable value                     3,213.39\nCGST 6%                             192.80\nSGST 6%                             192.81\n"
+         "Paid by card ****7031"),
     ],
 }
 
